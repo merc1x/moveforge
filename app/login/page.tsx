@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import { signIn } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -15,14 +17,13 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
     const res = await signIn("credentials", { email, password, redirect: false });
+    setLoading(false);
     if (res?.error) {
       setError("Invalid email or password.");
-      setLoading(false);
       return;
     }
-    // Hard navigation so the client router cache from any previous session is
-    // fully cleared (otherwise a stale /profile etc. can show the old account).
-    window.location.href = "/";
+    router.push("/");
+    router.refresh();
   }
 
   const inputStyle = {
