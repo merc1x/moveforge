@@ -1,20 +1,21 @@
-import { notFound, redirect } from "next/navigation";
-import { auth } from "@/auth";
+import { notFound } from "next/navigation";
 import prisma from "@/lib/prisma";
-import RepertoireBoard from "@/app/components/RepertoireBoard";
+import RepertoireEditor from "@/app/components/RepertoireEditor";
 
 export default async function RepertoireDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
-
   const { id } = await params;
 
   const repertoire = await prisma.repertoire.findFirst({
-    where: { id, userId: session.user.id },
-    include: { moves: { orderBy: { order: "asc" } } },
+    where: { id },
+    include: {
+      variations: {
+        include: { moves: { orderBy: { order: "asc" } } },
+        orderBy: { createdAt: "asc" },
+      },
+    },
   });
 
   if (!repertoire) notFound();
 
-  return <RepertoireBoard repertoire={repertoire} />;
+  return <RepertoireEditor repertoire={repertoire} />;
 }

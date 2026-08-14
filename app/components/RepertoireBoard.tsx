@@ -43,13 +43,23 @@ function buildTree(moves: Move[]): TreeNode[] {
       byId.get(node.move.parentMoveId)?.children.push(node);
     }
   }
-  // Sort children by order
   function sort(nodes: TreeNode[]) {
     nodes.sort((a, b) => a.move.order - b.move.order);
     nodes.forEach((n) => sort(n.children));
   }
   sort(roots);
   return roots;
+}
+
+function getAncestorIds(moves: Move[], moveId: string | null): Set<string> {
+  const set = new Set<string>();
+  const byId = new Map(moves.map((m) => [m.id, m]));
+  let cur = moveId ? byId.get(moveId) : undefined;
+  while (cur) {
+    set.add(cur.id);
+    cur = cur.parentMoveId ? byId.get(cur.parentMoveId) : undefined;
+  }
+  return set;
 }
 
 const STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -63,14 +73,14 @@ function MoveNode({ node, depth, currentMoveId, activePath, onSelect }: {
 }) {
   const isActive = node.move.id === currentMoveId;
   const isOnPath = activePath.has(node.move.id);
-  const isFirstMove = node.move.order % 2 === 1;
+  const isWhiteMove = node.move.order % 2 === 1;
   const moveNumber = Math.ceil(node.move.order / 2);
 
   return (
     <>
-      <div key={`row-${node.move.id}`} style={{ display: "flex", alignItems: "baseline", paddingLeft: depth * 14 }}>
-        {isFirstMove && (
-          <span style={{ fontSize: 10, color: "#444", marginRight: 4, minWidth: 24, flexShrink: 0 }}>
+      <div style={{ display: "flex", alignItems: "baseline", paddingLeft: depth * 10 }}>
+        {isWhiteMove && (
+          <span style={{ fontSize: 10, color: "#444", marginRight: 4, minWidth: 22, flexShrink: 0 }}>
             {moveNumber}.
           </span>
         )}
@@ -86,11 +96,11 @@ function MoveNode({ node, depth, currentMoveId, activePath, onSelect }: {
           {node.move.san}
         </span>
       </div>
-      {node.children.map((child, i) => (
+      {node.children.map((child) => (
         <MoveNode
           key={child.move.id}
           node={child}
-          depth={depth + (i > 0 ? 1 : 0)}
+          depth={depth + 1}
           currentMoveId={currentMoveId}
           activePath={activePath}
           onSelect={onSelect}
@@ -100,17 +110,6 @@ function MoveNode({ node, depth, currentMoveId, activePath, onSelect }: {
   );
 }
 
-function getAncestorIds(moves: Move[], moveId: string | null): Set<string> {
-  const set = new Set<string>();
-  const byId = new Map(moves.map((m) => [m.id, m]));
-  let cur = moveId ? byId.get(moveId) : undefined;
-  while (cur) {
-    set.add(cur.id);
-    cur = cur.parentMoveId ? byId.get(cur.parentMoveId) : undefined;
-  }
-  return set;
-}
-
 export default function RepertoireBoard({ repertoire }: { repertoire: Repertoire }) {
   const router = useRouter();
   const [moves, setMoves] = useState<Move[]>(repertoire.moves);
@@ -118,7 +117,6 @@ export default function RepertoireBoard({ repertoire }: { repertoire: Repertoire
   const [fen, setFen] = useState<string>(STARTING_FEN);
   const [highlights, setHighlights] = useState({});
   const [selectedSq, setSel] = useState<string | null>(null);
-  // Nur echte DB-IDs — wird als parentMoveId für API-Calls verwendet, nie tmp_-IDs
   const [savedMoveId, setSavedMoveId] = useState<string | null>(null);
 
   const currentMove = currentMoveId ? moves.find((m) => m.id === currentMoveId) ?? null : null;
@@ -129,13 +127,14 @@ export default function RepertoireBoard({ repertoire }: { repertoire: Repertoire
 
   function navigate(moveId: string | null) {
     const target = moveId ? moves.find((m) => m.id === moveId) ?? null : null;
-    setSavedMoveId(moveId); // IDs aus dem Baum sind immer echte DB-IDs
+    const isTemp = typeof moveId === "string" && moveId.startsWith("tmp_");
+    // Never use a temp id as parentMoveId in API calls — use its real parent instead
+    setSavedMoveId(isTemp ? (target?.parentMoveId ?? null) : moveId);
     setCurrentMoveId(moveId);
     setFen(target?.fen ?? STARTING_FEN);
     clearSelection();
   }
 
-  // Legal move highlights
   function showMovesFrom(sq: string) {
     const game = new Chess(fen);
     const legalMoves = game.moves({ square: sq as Square, verbose: true });
@@ -160,7 +159,7 @@ export default function RepertoireBoard({ repertoire }: { repertoire: Repertoire
     if (!result) return false;
 
     const newFen = game.fen();
-    setFen(newFen);  // sofort synchron setzen — verhindert Snap-Back
+    setFen(newFen);
     clearSelection();
 
     const tempId = "tmp_" + Date.now();
@@ -172,7 +171,7 @@ export default function RepertoireBoard({ repertoire }: { repertoire: Repertoire
       toSq: result.to,
       order: currentOrder + 1,
       repertoireId: repertoire.id,
-      parentMoveId: currentMoveId,
+      parentMoveId: savedMoveId,
     };
 
     setMoves((prev) => [...prev, tempMove]);
@@ -188,12 +187,15 @@ export default function RepertoireBoard({ repertoire }: { repertoire: Repertoire
         toSq: result.to,
         order: currentOrder + 1,
         repertoireId: repertoire.id,
-        parentMoveId: savedMoveId, // nie tmp_ — nur echte DB-IDs
+        parentMoveId: savedMoveId,
       }),
     })
       .then((r) => r.json())
       .then((saved: Move) => {
-        setMoves((prev) => prev.map((m) => m.id === tempId ? saved : m));
+        setMoves((prev) => {
+          const without = prev.filter((m) => m.id !== tempId && m.id !== saved.id);
+          return [...without, saved];
+        });
         setCurrentMoveId(saved.id);
         setSavedMoveId(saved.id);
       })
@@ -226,53 +228,45 @@ export default function RepertoireBoard({ repertoire }: { repertoire: Repertoire
   function goForward() {
     const children = moves.filter((m) => m.parentMoveId === currentMoveId);
     if (!children.length) return;
-    const next = children.find((m) => activePath.has(m.id)) ?? children[0];
-    navigate(next.id);
+    const onPath = children.find((m) => activePath.has(m.id));
+    navigate((onPath ?? children[0]).id);
   }
 
   function goToStart() { navigate(null); }
 
-  // Square styles
   const sqStyles = { ...highlights };
   if (currentMove) {
     sqStyles[currentMove.fromSq] = { background: "#c8a96e20" };
-    sqStyles[currentMove.toSq]   = { background: "#c8a96e35" };
+    sqStyles[currentMove.toSq] = { background: "#c8a96e35" };
   }
 
-  // Render tree
   const tree = buildTree(moves);
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: "#0f0f0f", color: "#e8e0d0", fontFamily: "'IBM Plex Mono', monospace" }}>
 
-      {/* Linke Spalte: Variantenbaum */}
       <div style={{ width: 300, flexShrink: 0, borderRight: "1px solid #1e1e1e", display: "flex", flexDirection: "column" }}>
-        {/* Zurück-Link */}
         <div style={{ padding: "14px 16px", borderBottom: "1px solid #1e1e1e" }}>
           <button
-            onClick={() => router.push("/repertoire")}
+            onClick={() => router.push("/")}
             style={{ background: "none", border: "none", color: "#555", fontSize: 11, cursor: "pointer", letterSpacing: "0.08em", textTransform: "uppercase", fontFamily: "inherit", padding: 0 }}
           >
-            ← Alle Repertoires
+            ← All Repertoires
           </button>
         </div>
 
-        {/* Repertoire-Info */}
         <div style={{ padding: "12px 16px", borderBottom: "1px solid #1e1e1e" }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: "#e8e0d0", marginBottom: 3 }}>{repertoire.name}</div>
           <div style={{ fontSize: 10, color: "#555", letterSpacing: "0.08em", textTransform: "uppercase" }}>
-            {repertoire.color === "white" ? "♔ Weiß" : "♚ Schwarz"}
+            {repertoire.color === "white" ? "♔ White" : "♚ Black"}
           </div>
         </div>
 
-        {/* Baum-Header */}
         <div style={{ padding: "8px 16px", borderBottom: "1px solid #1a1a1a", fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: "#444" }}>
-          Varianten
+          Variations
         </div>
 
-        {/* Variantenbaum */}
         <div style={{ flex: 1, overflowY: "auto", padding: "8px 8px 8px 4px" }}>
-          {/* Startposition */}
           <div
             onClick={goToStart}
             style={{
@@ -281,11 +275,11 @@ export default function RepertoireBoard({ repertoire }: { repertoire: Repertoire
               background: !currentMoveId ? "#c8a96e15" : "transparent",
             }}
           >
-            Startposition
+            Start position
           </div>
 
           {tree.length === 0 && (
-            <div style={{ padding: "8px", color: "#333", fontSize: 11 }}>Noch keine Züge</div>
+            <div style={{ padding: "8px", color: "#333", fontSize: 11 }}>No moves yet</div>
           )}
 
           {tree.map((node) => (
@@ -295,18 +289,16 @@ export default function RepertoireBoard({ repertoire }: { repertoire: Repertoire
               depth={0}
               currentMoveId={currentMoveId}
               activePath={activePath}
-              onSelect={(id) => { setCurrentMoveId(id); setHighlights({}); setSel(null); }}
+              onSelect={(id) => navigate(id)}
             />
           ))}
         </div>
 
-        {/* Zugzahl */}
         <div style={{ padding: "10px 16px", borderTop: "1px solid #1e1e1e", fontSize: 10, color: "#333", letterSpacing: "0.08em" }}>
-          {moves.length} {moves.length === 1 ? "Zug" : "Züge"} gespeichert
+          {moves.length} {moves.length === 1 ? "move" : "moves"} saved
         </div>
       </div>
 
-      {/* Rechte Seite: Brett */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 40, gap: 16 }}>
         <div style={{ borderRadius: 4, overflow: "hidden", boxShadow: "0 0 0 1px #2a2a2a, 0 24px 64px #000a" }}>
           <Chessboard
@@ -323,18 +315,16 @@ export default function RepertoireBoard({ repertoire }: { repertoire: Repertoire
               boardOrientation: repertoire.color === "black" ? "black" : "white",
             }}
           />
-          
         </div>
 
-        {/* Navigations-Buttons */}
-        <div style={{ display: "flex", gap: 8, width: 500 }}>
-          {[["⟨⟨", goToStart], ["⟨", goBack], ["⟩", goForward]].map(([label, fn], i) => (
+        <div style={{ display: "flex", gap: 8, width: 460 }}>
+          {([["⟨⟨", goToStart], ["⟨", goBack], ["⟩", goForward]] as const).map(([label, fn], i) => (
             <button
               key={i}
-              onClick={fn as () => void}
+              onClick={fn}
               style={{
                 flex: 1, padding: "10px 0", background: "transparent", border: "1px solid #2a2a2a",
-                color: "#666", fontSize: 11, letterSpacing: "0.1em", cursor: "pointer",
+                color: "#666", fontSize: 14, cursor: "pointer",
                 borderRadius: 3, fontFamily: "inherit",
               }}
               onMouseEnter={(e) => { e.currentTarget.style.color = "#c8a96e"; e.currentTarget.style.borderColor = "#c8a96e44"; }}

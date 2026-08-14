@@ -6,44 +6,34 @@ datasource db {
   provider = "postgresql"
 }
 
-model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  password  String
-  createdAt DateTime @default(now())
-
-  repertoires Repertoire[]
-  reviews     Review[]
+model Repertoire {
+  id         String      @id @default(cuid())
+  name       String
+  color      String
+  createdAt  DateTime    @default(now())
+  variations Variation[]
 }
 
-model Repertoire {
-  id        String   @id @default(cuid())
-  name      String
-  color     String
-  createdAt DateTime @default(now())
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id])
-  moves  Move[]
+model Variation {
+  id           String     @id @default(cuid())
+  name         String
+  repertoireId String
+  repertoire   Repertoire @relation(fields: [repertoireId], references: [id])
+  moves        Move[]
+  createdAt    DateTime   @default(now())
 }
 
 model Move {
-  id           String  @id @default(cuid())
-  fen          String
-  san          String
-  fromSq       String
-  toSq         String
-  order        Int
-  comment      String?
-
-  parentMoveId String?
-  parent       Move?   @relation("MoveTree", fields: [parentMoveId], references: [id])
-  children     Move[]  @relation("MoveTree")
-
-  repertoireId String
-  repertoire   Repertoire @relation(fields: [repertoireId], references: [id])
-  reviews      Review[]
+  id          String    @id @default(cuid())
+  fen         String
+  san         String
+  fromSq      String
+  toSq        String
+  order       Int
+  comment     String?
+  variationId String
+  variation   Variation @relation(fields: [variationId], references: [id])
+  reviews     Review[]
 }
 
 model Review {
@@ -53,9 +43,6 @@ model Review {
   repetitions Int      @default(0)
   nextReview  DateTime @default(now())
   createdAt   DateTime @default(now())
-
-  moveId String
-  move   Move   @relation(fields: [moveId], references: [id])
-  userId String
-  user   User   @relation(fields: [userId], references: [id])
+  moveId      String
+  move        Move     @relation(fields: [moveId], references: [id])
 }

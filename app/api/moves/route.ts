@@ -1,35 +1,46 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
+
+export async function GET(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const variationId = searchParams.get("variationId");
+    if (!variationId)
+      return NextResponse.json({ error: "variationId required." }, { status: 400 });
+
+    const moves = await prisma.move.findMany({
+      where: { variationId },
+      orderBy: { order: "asc" },
+    });
+
+    return NextResponse.json(moves);
+  } catch (e) {
+    console.error("GET /api/moves:", e);
+    return NextResponse.json({ error: "Internal server error." }, { status: 500 });
+  }
+}
 
 export async function POST(req: Request) {
   try {
-    const session = await auth();
-    if (!session?.user?.id)
-      return NextResponse.json({ error: "Nicht angemeldet." }, { status: 401 });
+    const { fen, san, fromSq, toSq, order, variationId } = await req.json();
 
-    const { fen, san, fromSq, toSq, order, repertoireId, parentMoveId } = await req.json();
+    if (!fen || !san || !fromSq || !toSq || !order || !variationId)
+      return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
 
-    // Sicherstellen dass das Repertoire dem User gehört
-    const repertoire = await prisma.repertoire.findFirst({
-      where: { id: repertoireId, userId: session.user.id },
-    });
-    if (!repertoire)
-      return NextResponse.json({ error: "Repertoire nicht gefunden." }, { status: 404 });
+    const variation = await prisma.variation.findFirst({ where: { id: variationId } });
+    if (!variation)
+      return NextResponse.json({ error: "Variation not found." }, { status: 404 });
 
-    // Zug existiert schon? (selber Parent + selbes SAN)
-    const existing = await prisma.move.findFirst({
-      where: { repertoireId, parentMoveId: parentMoveId ?? null, san },
-    });
-    if (existing) return NextResponse.json(existing, { status: 200 });
+    // Truncate the variation from this order onward, then insert new move
+    await prisma.move.deleteMany({ where: { variationId, order: { gte: order } } });
 
     const move = await prisma.move.create({
-      data: { fen, san, fromSq, toSq, order, repertoireId, parentMoveId: parentMoveId ?? null },
+      data: { fen, san, fromSq, toSq, order, variationId },
     });
 
     return NextResponse.json(move, { status: 201 });
   } catch (e) {
     console.error("POST /api/moves:", e);
-    return NextResponse.json({ error: "Interner Serverfehler." }, { status: 500 });
+    return NextResponse.json({ error: "Internal server error." }, { status: 500 });
   }
 }

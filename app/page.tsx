@@ -1,9 +1,10 @@
-import ChessBoard from "./components/ChessBoard";
+import prisma from "@/lib/prisma";
+import RepertoireList from "@/app/components/RepertoireList";
 
-export default function Home() {
-  return (
-    <main>
-      <ChessBoard boardWidth={480} onMovePlayed={undefined} />
-    </main>
-  );
+export default async function Home() {
+  const repertoires = await prisma.repertoire.findMany({
+    orderBy: { createdAt: "desc" },
+  });
+
+  return <RepertoireList repertoires={repertoires} />;
 }
