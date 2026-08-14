@@ -2,11 +2,9 @@
 
 import { useState } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 export default function RegisterPage() {
-  const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -33,13 +31,12 @@ export default function RegisterPage() {
 
     // Sign the new user straight in.
     const s = await signIn("credentials", { email, password, redirect: false });
-    setLoading(false);
     if (s?.error) {
-      router.push("/login");
+      window.location.href = "/login";
       return;
     }
-    router.push("/");
-    router.refresh();
+    // Hard navigation so no stale client cache from a previous session remains.
+    window.location.href = "/";
   }
 
   const inputStyle = {
