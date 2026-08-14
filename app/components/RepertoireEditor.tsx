@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { Chess, Square } from "chess.js";
 import MoveTrainer from "./MoveTrainer";
@@ -23,6 +23,7 @@ type Move = {
   order: number;
   comment?: string | null;
   variationId: string;
+  review?: { level: number } | null;
 };
 
 type Variation = {
@@ -167,6 +168,7 @@ function pgnMovetext(pgn: string): string {
 
 export default function RepertoireEditor({ repertoire }: { repertoire: Repertoire }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [variations, setVariations] = useState<Variation[]>(repertoire.variations);
   const [selectedId, setSelectedId] = useState<string | null>(
     repertoire.variations[0]?.id ?? null
@@ -191,6 +193,12 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
   const moves = selectedVar?.moves ?? [];
   const currentMove = currentIndex >= 0 ? (moves[currentIndex] ?? null) : null;
 
+  // A variation is "learned" once all the user's own moves are in the SRS.
+  function variationLearned(v: Variation): boolean {
+    const um = v.moves.filter((m) => isUserMove(m.order, repertoire.color));
+    return um.length > 0 && um.every((m) => !!m.review);
+  }
+
   // Next variation with moves (wrapping), for "next" in training mode
   const trainable = variations.filter((v) => v.moves.length > 0);
   const nextTrainable = (() => {
@@ -199,6 +207,46 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
     const candidate = i === -1 ? trainable[0] : trainable[(i + 1) % trainable.length];
     return candidate.id === selectedId ? null : candidate;
   })();
+
+  // Next still-unlearned variation, for "next" while learning.
+  const unlearned = variations.filter((v) => v.moves.length > 0 && !variationLearned(v));
+  const nextUnlearned = (() => {
+    const pool = unlearned.filter((v) => v.id !== selectedId);
+    return pool[0] ?? null;
+  })();
+
+  // Mark a variation learned locally (optimistic) and persist it.
+  function markLearned(variationId: string) {
+    setVariations((prev) =>
+      prev.map((v) =>
+        v.id === variationId
+          ? {
+              ...v,
+              moves: v.moves.map((m) =>
+                isUserMove(m.order, repertoire.color) && !m.review
+                  ? { ...m, review: { level: 1 } }
+                  : m
+              ),
+            }
+          : v
+      )
+    );
+    fetch("/api/learn", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ variationId }),
+    }).catch(console.error);
+  }
+
+  // Entry from the home "Learn" button: start in learn mode on the first
+  // not-yet-learned variation.
+  useEffect(() => {
+    if (searchParams.get("learn") !== "1") return;
+    setMode("learn");
+    const first = variations.find((v) => v.moves.length > 0 && !variationLearned(v));
+    if (first) setSelectedId(first.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function selectVariation(id: string) {
     setSelectedId(id);
@@ -789,9 +837,13 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
                 variation={selectedVar}
                 color={repertoire.color}
                 mode={mode}
-                onNext={nextTrainable ? () => selectVariation(nextTrainable.id) : null}
+                onNext={
+                  mode === "learn"
+                    ? (nextUnlearned ? () => selectVariation(nextUnlearned.id) : null)
+                    : (nextTrainable ? () => selectVariation(nextTrainable.id) : null)
+                }
                 onTrain={mode === "learn" ? () => setMode("train") : null}
-                onMovePlayed={setLearnNote}
+                onLearned={mode === "learn" ? () => markLearned(selectedVar.id) : null}
               />
             ) : (
             <div style={{ width: "min(calc(100vh - 180px), 100%, 860px)", display: "flex", flexDirection: "column", gap: 16 }}>
@@ -838,8 +890,9 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
         )}
       </div>
 
-      {/* ── Right sidebar: move list (hidden while training — it would reveal answers) ── */}
-      {mode !== "train" && (
+      {/* ── Right sidebar: move list — only in edit mode (a scoresheet would
+           spoil learning and reveal answers while training) ── */}
+      {mode === "edit" && (
       <div style={{ width: 260, flexShrink: 0, borderLeft: border, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <div style={{ padding: "10px 14px", borderBottom: border, fontSize: 10, color: "var(--text-4)" }}>
           Move List

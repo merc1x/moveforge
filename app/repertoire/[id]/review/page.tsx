@@ -34,20 +34,22 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
   for (const variation of repertoire.variations) {
     if (variation.moves.length === 0) continue;
 
+    // A line is reviewable only once it has been learned — every user move must
+    // already be in the SRS. Then it's due if any of those reviews has come up.
+    let learned = true;
     let due = false;
-    let earliest = Infinity; // earliest scheduled-due time; new-only lines stay Infinity
+    let earliest = Infinity;
 
     for (const m of variation.moves) {
       if (!isUserMove(m.order, repertoire.color)) continue;
-      if (!m.review) {
-        due = true; // never seen → due
-      } else if (m.review.nextReview <= now) {
+      if (!m.review) { learned = false; break; }
+      if (m.review.nextReview <= now) {
         due = true;
         earliest = Math.min(earliest, m.review.nextReview.getTime());
       }
     }
 
-    if (!due) continue;
+    if (!learned || !due) continue;
 
     candidates.push({
       sortKey: earliest,

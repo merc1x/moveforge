@@ -34,9 +34,6 @@ export async function POST(req: Request) {
       update: data,
     });
 
-    // Log the review event for the activity heatmap.
-    await prisma.reviewLog.create({ data: { userId: session.user.id } });
-
     return NextResponse.json({ level: review.level, promoted: result.promoted });
   } catch (e) {
     console.error("POST /api/review:", e);

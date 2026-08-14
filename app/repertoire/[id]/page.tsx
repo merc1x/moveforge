@@ -15,7 +15,12 @@ export default async function RepertoireDetailPage({ params }: { params: Promise
     where: { id, userId: session.user.id },
     include: {
       variations: {
-        include: { moves: { orderBy: { order: "asc" } } },
+        include: {
+          moves: {
+            orderBy: { order: "asc" },
+            include: { review: { select: { level: true } } },
+          },
+        },
         orderBy: { createdAt: "asc" },
       },
     },

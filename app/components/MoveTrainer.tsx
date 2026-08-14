@@ -35,14 +35,14 @@ export default function MoveTrainer({
   onNext,
   mode = "train",
   onTrain = null,
-  onMovePlayed = null
+  onLearned = null
 }: {
   variation: Variation;
   color: string;
   onNext: (() => void) | null;
   mode?: "learn" | "train";
   onTrain?: (() => void) | null;
-  onMovePlayed?: ((move: Move | null) => void) | null;
+  onLearned?: (() => void) | null;
 }) {
   const learn = mode === "learn";
   const moves = variation.moves;
@@ -55,6 +55,9 @@ export default function MoveTrainer({
   const [showHint, setShowHint] = useState(false);
   const [highlights, setHighlights] = useState<Record<string, object>>({});
   const [selectedSq, setSel] = useState<string | null>(null);
+  // Learn flow per move: demo (shown) → explain (only if it has a note) → replay.
+  const [phase, setPhase] = useState<"demo" | "explain" | "replay">("demo");
+  const [animMs, setAnimMs] = useState(120); // board animation; 0 = instant (teleport)
 
   const finished = moves.length > 0 && moveIdx >= moves.length;
   const expected = finished ? null : moves[moveIdx] ?? null;
@@ -62,11 +65,14 @@ export default function MoveTrainer({
     ? (color === "white") === (moveIdx % 2 === 0)
     : false;
   const lastPlayed = moveIdx > 0 ? moves[moveIdx - 1] : null;
+  // Input is blocked until you reach the replay phase of your move.
+  const demoing = learn && isUserMove && !finished && phase !== "replay";
 
-  // Let the parent show the last played move's comment (learn mode notes panel)
+  // Finishing a learn run enrolls the variation into the SRS (parent persists it).
   useEffect(() => {
-    if (onMovePlayed) onMovePlayed(lastPlayed ?? null);
-  }, [moveIdx]);
+    if (finished && learn && onLearned) onLearned();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [finished]);
 
   // Auto-play opponent moves after a short delay
   useEffect(() => {
@@ -78,6 +84,37 @@ export default function MoveTrainer({
     return () => clearTimeout(t);
   }, [moveIdx, expected, isUserMove]);
 
+  // Each time a new move of yours comes up, restart its learn cycle at "demo".
+  useEffect(() => {
+    if (learn && isUserMove && !finished) setPhase("demo");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [moveIdx]);
+
+  // Demonstrate the move (play it). Then pause to explain if it has a note,
+  // otherwise go straight to the replay.
+  useEffect(() => {
+    if (!learn || phase !== "demo" || !isUserMove || finished || !expected) return;
+    const t1 = setTimeout(() => setFen(expected.fen), 300);
+    const t2 = setTimeout(() => {
+      if (expected.comment) setPhase("explain");
+      else startReplay();
+    }, 1100);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, moveIdx]);
+
+  // Hand control back to you: replay the opponent's move (animated) to reset the
+  // position, then wait for you to play your move.
+  function startReplay() {
+    const beforeFen = moveIdx > 0 ? moves[moveIdx - 1].fen : STARTING_FEN;
+    const oppBefore = moveIdx >= 2 ? moves[moveIdx - 2].fen : STARTING_FEN;
+    setAnimMs(0);
+    setFen(moveIdx > 0 ? oppBefore : STARTING_FEN);
+    setTimeout(() => { setAnimMs(120); setFen(beforeFen); }, 80);
+    clearSel();
+    setPhase("replay");
+  }
+
   function clearSel() { setHighlights({}); setSel(null); }
 
   function restart() {
@@ -88,6 +125,8 @@ export default function MoveTrainer({
     setCorrect(0);
     setShowHint(false);
     setFlashSq(null);
+    setAnimMs(120);
+    setPhase("demo");
     clearSel();
   }
 
@@ -110,7 +149,7 @@ export default function MoveTrainer({
   }
 
   function tryMove(from: string, to: string): boolean {
-    if (!isUserMove || !expected) return false;
+    if (!isUserMove || !expected || demoing) return false;
     const game = new Chess(fen);
     let result;
     try { result = game.move({ from, to, promotion: "q" }); } catch { result = null; }
@@ -143,21 +182,22 @@ export default function MoveTrainer({
     showLegalMoves(sq);
   }
 
-  const hintFromSq = learn || attempts >= 2 || showHint;
-  const hintSan = learn || attempts >= 3 || showHint;
+  const hintSan = !learn && (attempts >= 3 || showHint); // train-only SAN reveal in status
 
   const sqStyles: Record<string, object> = { ...highlights };
   if (lastPlayed) {
     sqStyles[lastPlayed.fromSq] = { background: "#c8a96e20" };
     sqStyles[lastPlayed.toSq] = { background: "#c8a96e35" };
   }
-  if (hintFromSq && expected && isUserMove) {
+  // Train: nudge with the from-square after misses or "Show answer".
+  if (!learn && expected && isUserMove && (attempts >= 2 || showHint)) {
     sqStyles[expected.fromSq] = { background: "#6699cc45" };
-    if (learn) {
-      sqStyles[expected.toSq] = {
-        background: "radial-gradient(circle, #6699cc70 30%, transparent 34%)"
-      };
-    }
+  }
+  // Learn: while showing/explaining, mark the demonstrated move. In the replay
+  // phase nothing is marked — you recall it yourself.
+  if (learn && expected && isUserMove && phase !== "replay") {
+    sqStyles[expected.fromSq] = { background: "#6699cc40" };
+    sqStyles[expected.toSq] = { background: "#6699cc55" };
   }
   if (flashSq) {
     sqStyles[flashSq] = { background: "#e0525255" };
@@ -169,7 +209,9 @@ export default function MoveTrainer({
   else if (!isUserMove) { statusDot = "var(--text-3)"; statusText = "Opponent replies…"; }
   else if (learn && expected) {
     statusDot = "var(--info)";
-    statusText = attempts > 0 ? `Not that one — play ${expected.san}` : `Play ${expected.san}`;
+    statusText = phase === "demo" ? "Watch"
+      : phase === "explain" ? "Read the note"
+      : attempts > 0 ? "Not that move — try again" : "Your move — play it";
   }
   else if (attempts > 0) { statusDot = "var(--danger)"; statusText = "Wrong move — try again"; }
   if (statusText === "Your move" && hintSan && expected) {
@@ -189,13 +231,17 @@ export default function MoveTrainer({
   }
 
   const btnStyle = {
-    flex: 1, padding: "9px 0", background: "transparent", border: "1px solid var(--border)",
-    color: "var(--text-3)", fontSize: 11, cursor: "pointer", borderRadius: 3, fontFamily: "inherit"
+    width: "100%", padding: "10px 0", background: "transparent", border: "1px solid var(--border)",
+    color: "var(--text-3)", fontSize: 12, cursor: "pointer", borderRadius: 6, fontFamily: "inherit"
   };
 
   return (
-    <div style={{ width: `min(calc(100vh - ${learn ? 180 : 250}px), 100%, 860px)`, display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ borderRadius: 4, overflow: "hidden", boxShadow: "var(--board-shadow)", aspectRatio: "1", position: "relative" }}>
+    <div style={{ display: "flex", gap: 24, alignItems: "flex-start" }}>
+      {/* Board */}
+      <div style={{
+        width: "min(calc(100vh - 130px), calc(100vw - 640px), 760px)", aspectRatio: "1", flexShrink: 0,
+        borderRadius: 4, overflow: "hidden", boxShadow: "var(--board-shadow)", position: "relative"
+      }}>
         <Chessboard
           options={{
             position: fen,
@@ -203,12 +249,12 @@ export default function MoveTrainer({
             onPieceDrag: onPieceDragStart,
             onSquareClick,
             boardStyle: { width: "100%", height: "100%" },
-            animationDurationInMs: 120,
+            animationDurationInMs: animMs,
             darkSquareStyle: { backgroundColor: "#a87d54" },
             lightSquareStyle: { backgroundColor: "#e3cdab" },
             squareStyles: sqStyles,
             boardOrientation: color === "black" ? "black" : "white",
-            allowDragging: isUserMove
+            allowDragging: isUserMove && !demoing
           }}
         />
         {finished && (
@@ -266,58 +312,69 @@ export default function MoveTrainer({
         )}
       </div>
 
-      <div style={{
-        display: "flex", alignItems: "center", gap: 10, padding: "10px 14px",
-        background: "var(--panel)", borderRadius: 4, border: "1px solid var(--border)",
-        fontSize: 11 }}>
-        <div style={{ width: 8, height: 8, borderRadius: "50%", background: statusDot, flexShrink: 0 }} />
-        <span>{statusText}</span>
-        <span style={{ marginLeft: "auto", color: "var(--text-3)", textTransform: "none" }}>
-          {correct}/{totalUserMoves} · {mistakes} ✕
-        </span>
-      </div>
-
-      {/* Train mode only (sidebar hidden there); fixed height so the board doesn't shift */}
-      {!learn && (
-        <div style={{
-          height: 56, boxSizing: "border-box", overflowY: "auto",
-          padding: "9px 14px", background: "var(--panel)", border: "1px solid var(--border)",
-          borderRadius: 4, fontSize: 11, lineHeight: 1.6, color: "var(--comment)", fontStyle: "italic"
-        }}>
-          {lastPlayed?.comment ?? ""}
+      {/* Right text panel */}
+      <div style={{ width: 280, flexShrink: 0, display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ padding: "14px 16px", background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+            <div style={{ width: 9, height: 9, borderRadius: "50%", background: statusDot, flexShrink: 0 }} />
+            <span style={{ fontSize: 15, fontWeight: 500 }}>{statusText}</span>
+          </div>
+          {/* Train: the move you just played. Learn: only while explaining, the
+              note for the demonstrated move. */}
+          {((!learn && lastPlayed?.comment) || (learn && phase === "explain" && expected?.comment)) && (
+            <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)", color: "var(--text-2)", fontSize: 15, lineHeight: 1.6 }}>
+              {learn ? expected?.comment : lastPlayed?.comment}
+            </div>
+          )}
+          <div style={{ marginTop: 12, fontSize: 12, color: "var(--text-4)" }}>
+            {correct}/{totalUserMoves} correct · {mistakes} wrong
+          </div>
         </div>
-      )}
 
-      <div style={{ display: "flex", gap: 8 }}>
-        {!learn && (
-        <button
-          onClick={() => setShowHint(true)}
-          disabled={!isUserMove || finished}
-          style={{ ...btnStyle, opacity: !isUserMove || finished ? 0.4 : 1 }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = "var(--info)"; e.currentTarget.style.borderColor = "var(--info-border)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-3)"; e.currentTarget.style.borderColor = "var(--border)"; }}
-        >
-          Hint
-        </button>
-        )}
-        <button
-          onClick={restart}
-          style={btnStyle}
-          onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; e.currentTarget.style.borderColor = "var(--accent-border)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-3)"; e.currentTarget.style.borderColor = "var(--border)"; }}
-        >
-          Restart
-        </button>
-        {onNext && (
+        {learn && phase === "explain" && (
           <button
-            onClick={onNext}
+            onClick={startReplay}
+            style={{
+              width: "100%", padding: "11px 0", background: "var(--accent)", border: "none",
+              borderRadius: 8, color: "var(--accent-text)", fontSize: 14, fontWeight: 600,
+              cursor: "pointer", fontFamily: "inherit"
+            }}
+          >
+            Continue →
+          </button>
+        )}
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {!learn && (
+            <button
+              onClick={() => setShowHint(true)}
+              disabled={!isUserMove || finished}
+              style={{ ...btnStyle, opacity: !isUserMove || finished ? 0.4 : 1 }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = "var(--info)"; e.currentTarget.style.borderColor = "var(--info-border)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-3)"; e.currentTarget.style.borderColor = "var(--border)"; }}
+            >
+              Hint
+            </button>
+          )}
+          <button
+            onClick={restart}
             style={btnStyle}
             onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; e.currentTarget.style.borderColor = "var(--accent-border)"; }}
             onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-3)"; e.currentTarget.style.borderColor = "var(--border)"; }}
           >
-            Skip →
+            Restart
           </button>
-        )}
+          {onNext && (
+            <button
+              onClick={onNext}
+              style={btnStyle}
+              onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; e.currentTarget.style.borderColor = "var(--accent-border)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-3)"; e.currentTarget.style.borderColor = "var(--border)"; }}
+            >
+              Skip →
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

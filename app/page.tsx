@@ -22,18 +22,22 @@ export default async function Home() {
 
   const now = new Date();
 
-  // Count lines (variations) due now — matching what a review session plays.
-  // A line is due when any of the user's moves in it is new or past its review.
+  // Per repertoire: how many variations still need learning, and how many
+  // already-learned ones are due for review.
   const withCounts = repertoires.map((r) => {
+    let learnCount = 0;
     let dueCount = 0;
     for (const v of r.variations) {
-      if (v.moves.length === 0) continue;
-      const due = v.moves.some(
-        (m) => isUserMove(m.order, r.color) && (!m.review || m.review.nextReview <= now)
-      );
-      if (due) dueCount++;
+      const userMoves = v.moves.filter((m) => isUserMove(m.order, r.color));
+      if (userMoves.length === 0) continue;
+      const learned = userMoves.every((m) => !!m.review);
+      if (!learned) {
+        learnCount++;
+      } else if (userMoves.some((m) => m.review!.nextReview <= now)) {
+        dueCount++;
+      }
     }
-    return { id: r.id, name: r.name, color: r.color, createdAt: r.createdAt, dueCount };
+    return { id: r.id, name: r.name, color: r.color, createdAt: r.createdAt, learnCount, dueCount };
   });
 
   const label = session.user.name || session.user.email || "?";

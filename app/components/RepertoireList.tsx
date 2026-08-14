@@ -10,6 +10,7 @@ type Repertoire = {
   name: string;
   color: string;
   createdAt: Date;
+  learnCount: number;
   dueCount: number;
 };
 
@@ -23,6 +24,7 @@ export default function RepertoireList({ repertoires: initial, userInitial }: { 
   const [error, setError] = useState<string | null>(null);
 
   const totalDue = repertoires.reduce((s, r) => s + r.dueCount, 0);
+  const totalLearn = repertoires.reduce((s, r) => s + r.learnCount, 0);
 
   async function handleCreate(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -44,7 +46,7 @@ export default function RepertoireList({ repertoires: initial, userInitial }: { 
     }
 
     const created = await res.json();
-    setRepertoires((prev) => [{ ...created, dueCount: 0 }, ...prev]);
+    setRepertoires((prev) => [{ ...created, learnCount: 0, dueCount: 0 }, ...prev]);
     setName("");
     setColor("white");
     setShowForm(false);
@@ -60,11 +62,14 @@ export default function RepertoireList({ repertoires: initial, userInitial }: { 
     }).catch(console.error);
   }
 
-  const deck =
-    repertoires.length === 0
-      ? "Build your first opening repertoire to begin."
-      : `${repertoires.length} ${repertoires.length === 1 ? "repertoire" : "repertoires"}` +
-        (totalDue ? ` · ${totalDue} ${totalDue === 1 ? "move" : "moves"} due today` : " · all caught up");
+  const deck = (() => {
+    if (repertoires.length === 0) return "Build your first opening repertoire to begin.";
+    const parts = [`${repertoires.length} ${repertoires.length === 1 ? "repertoire" : "repertoires"}`];
+    if (totalLearn) parts.push(`${totalLearn} to learn`);
+    if (totalDue) parts.push(`${totalDue} due today`);
+    if (!totalLearn && !totalDue) parts.push("all caught up");
+    return parts.join(" · ");
+  })();
 
   return (
     <div style={{ minHeight: "100vh", padding: "0 24px 80px" }}>
@@ -249,6 +254,18 @@ export default function RepertoireList({ repertoires: initial, userInitial }: { 
                   </div>
                 </div>
 
+                {r.learnCount > 0 && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); router.push(`/repertoire/${r.id}?learn=1`); }}
+                    style={{
+                      flexShrink: 0, padding: "8px 16px", background: "transparent",
+                      border: "1px solid var(--accent-border)", borderRadius: 999,
+                      color: "var(--accent)", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                    }}
+                  >
+                    Learn {r.learnCount}
+                  </button>
+                )}
                 {r.dueCount > 0 ? (
                   <button
                     onClick={(e) => { e.stopPropagation(); router.push(`/repertoire/${r.id}/review`); }}
@@ -260,11 +277,11 @@ export default function RepertoireList({ repertoires: initial, userInitial }: { 
                   >
                     {r.dueCount} due →
                   </button>
-                ) : (
+                ) : r.learnCount === 0 ? (
                   <span style={{ flexShrink: 0, fontSize: 13, color: "var(--text-4)" }}>
                     Up to date
                   </span>
-                )}
+                ) : null}
 
                 <button
                   title="Delete repertoire"

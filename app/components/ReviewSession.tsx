@@ -76,6 +76,12 @@ export default function ReviewSession({
   // End of a line → advance to the next one (pause longer if there's a note).
   useEffect(() => {
     if (!line || moveIdx < line.moves.length) return;
+    // Log one heatmap entry for the completed line (counts variations, not moves).
+    fetch("/api/review/line", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ variationId: line.variationId }),
+    }).catch(console.error);
     const t = setTimeout(() => {
       setLineIdx((i) => i + 1);
       setMoveIdx(0);
