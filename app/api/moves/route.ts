@@ -20,6 +20,24 @@ export async function GET(req: Request) {
   }
 }
 
+export async function PATCH(req: Request) {
+  try {
+    const { id, comment } = await req.json();
+    if (!id)
+      return NextResponse.json({ error: "id required." }, { status: 400 });
+
+    const move = await prisma.move.update({
+      where: { id },
+      data: { comment: typeof comment === "string" && comment.trim() ? comment.trim() : null },
+    });
+
+    return NextResponse.json(move);
+  } catch (e) {
+    console.error("PATCH /api/moves:", e);
+    return NextResponse.json({ error: "Internal server error." }, { status: 500 });
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const { fen, san, fromSq, toSq, order, variationId } = await req.json();

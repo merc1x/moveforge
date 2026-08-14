@@ -3,3 +3,64 @@
   padding: 0;
   box-sizing: border-box;
 }
+
+/* ── Theme tokens ──────────────────────────────────────────────────────────
+   Board wood colors are intentionally NOT tokens — the board looks right in
+   both themes and acts as the visual anchor. */
+
+:root,
+[data-theme="dark"] {
+  --bg: #1c1a17;
+  --panel: #26231f;
+  --border: #3a352e;
+  --border-soft: #322d27;
+  --border-hover: #4a443a;
+  --overlay: #1c1a17d9;
+  --text: #ece5d8;
+  --text-2: #b5ab98;
+  --text-3: #978d7b;
+  --text-4: #6e6557;
+  --comment: #a39782;
+  --accent: #c8a96e;
+  --accent-text: #1c1a17;
+  --accent-soft: #c8a96e26;
+  --accent-faint: #c8a96e14;
+  --accent-border: #c8a96e55;
+  --hover: #ffffff0a;
+  --success: #6cc06c;
+  --danger: #e05c52;
+  --info: #7aa7d4;
+  --info-border: #7aa7d455;
+  --board-shadow: 0 0 0 1px #3a352e, 0 20px 56px #00000070;
+}
+
+[data-theme="light"] {
+  --bg: #efe9dd;
+  --panel: #f8f4ec;
+  --border: #d9d0bf;
+  --border-soft: #e3dccc;
+  --border-hover: #c4b89f;
+  --overlay: #efe9dde0;
+  --text: #2a2620;
+  --text-2: #57503f;
+  --text-3: #6f664f;
+  --text-4: #998f78;
+  --comment: #6f664f;
+  --accent: #a8854a;
+  --accent-text: #fdf9f0;
+  --accent-soft: #a8854a26;
+  --accent-faint: #a8854a14;
+  --accent-border: #a8854a66;
+  --hover: #00000008;
+  --success: #2e7d32;
+  --danger: #b3403a;
+  --info: #3d6ea5;
+  --info-border: #3d6ea555;
+  --board-shadow: 0 0 0 1px #d9d0bf, 0 16px 40px #00000026;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
+}
