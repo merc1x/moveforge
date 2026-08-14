@@ -7,6 +7,7 @@ import dynamic from "next/dynamic";
 import { Chess, Square } from "chess.js";
 import MoveTrainer from "./MoveTrainer";
 import ThemeToggle from "./ThemeToggle";
+import { isUserMove } from "@/lib/srs";
 
 const Chessboard = dynamic(
   () => import("react-chessboard").then((m) => m.Chessboard),
@@ -728,7 +729,10 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
                         {v.name}
                       </div>
                       <div style={{ fontSize: 10, color: "var(--text-4)", marginTop: 2 }}>
-                        {Math.ceil(v.moves.length / 2)} {Math.ceil(v.moves.length / 2) === 1 ? "move" : "moves"}
+                        {(() => {
+                          const n = v.moves.filter((m) => isUserMove(m.order, repertoire.color)).length;
+                          return `${n} ${n === 1 ? "move" : "moves"}`;
+                        })()}
                       </div>
                     </div>
                     <button

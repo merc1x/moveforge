@@ -1,13 +1,19 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import prisma from "@/lib/prisma";
-import { isUserMove, REVIEW_LINES_PER_SESSION } from "@/lib/sm2";
+import { auth } from "@/auth";
+import { isUserMove } from "@/lib/srs";
 import ReviewSession, { ReviewLine } from "@/app/components/ReviewSession";
+
+export const dynamic = "force-dynamic";
 
 export default async function ReviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
+
   const repertoire = await prisma.repertoire.findFirst({
-    where: { id },
+    where: { id, userId: session.user.id },
     include: {
       variations: {
         include: { moves: { orderBy: { order: "asc" }, include: { review: true } } },
@@ -56,14 +62,16 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
           fen: m.fen,
           comment: m.comment ?? null,
           isUserMove: isUserMove(m.order, repertoire.color),
+          level: m.review?.level ?? 0,
         })),
       },
     });
   }
 
   // Overdue scheduled lines first (earliest due), then brand-new lines.
+  // All due lines are shown; you can exit any time — each move is saved as you go.
   candidates.sort((a, b) => a.sortKey - b.sortKey);
-  const lines = candidates.slice(0, REVIEW_LINES_PER_SESSION).map((c) => c.line);
+  const lines = candidates.map((c) => c.line);
 
   return (
     <ReviewSession

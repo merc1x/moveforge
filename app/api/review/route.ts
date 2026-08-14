@@ -1,14 +1,22 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { sm2 } from "@/lib/sm2";
+import { auth } from "@/auth";
+import { ownsMove } from "@/lib/ownership";
+import { nextState } from "@/lib/srs";
 
-// Record one review of a move and advance its SM-2 schedule.
+// Record one review of a move: promote/demote its level and reschedule it.
 export async function POST(req: Request) {
   try {
-    const { moveId, quality } = await req.json();
+    const session = await auth();
+    if (!session?.user?.id)
+      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
-    if (!moveId || typeof quality !== "number")
-      return NextResponse.json({ error: "moveId and numeric quality required." }, { status: 400 });
+    const { moveId, correct } = await req.json();
+
+    if (!moveId || typeof correct !== "boolean")
+      return NextResponse.json({ error: "moveId and boolean correct required." }, { status: 400 });
+    if (!(await ownsMove(session.user.id, moveId)))
+      return NextResponse.json({ error: "Not found." }, { status: 404 });
 
     const move = await prisma.move.findFirst({
       where: { id: moveId },
@@ -17,28 +25,19 @@ export async function POST(req: Request) {
     if (!move)
       return NextResponse.json({ error: "Move not found." }, { status: 404 });
 
-    const prev = move.review ?? { ease: 2.5, interval: 0, repetitions: 0 };
-    const next = sm2(
-      { ease: prev.ease, interval: prev.interval, repetitions: prev.repetitions },
-      quality
-    );
+    const result = nextState(move.review?.level ?? 0, correct);
 
-    const data = {
-      ease: next.ease,
-      interval: next.interval,
-      repetitions: next.repetitions,
-      nextReview: next.nextReview,
-      lastReview: new Date(),
-      lapses: (move.review?.lapses ?? 0) + (next.lapsed ? 1 : 0),
-    };
-
+    const data = { level: result.level, nextReview: result.nextReview, lastReview: new Date() };
     const review = await prisma.review.upsert({
       where: { moveId },
       create: { moveId, ...data },
       update: data,
     });
 
-    return NextResponse.json(review);
+    // Log the review event for the activity heatmap.
+    await prisma.reviewLog.create({ data: { userId: session.user.id } });
+
+    return NextResponse.json({ level: review.level, promoted: result.promoted });
   } catch (e) {
     console.error("POST /api/review:", e);
     return NextResponse.json({ error: "Internal server error." }, { status: 500 });

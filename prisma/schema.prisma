@@ -6,11 +6,33 @@ datasource db {
   provider = "postgresql"
 }
 
+model User {
+  id          String       @id @default(cuid())
+  email       String       @unique
+  password    String
+  name        String?
+  createdAt   DateTime     @default(now())
+  repertoires Repertoire[]
+  reviewLogs  ReviewLog[]
+}
+
+// One row per graded move review — powers the activity heatmap.
+model ReviewLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
 model Repertoire {
   id         String      @id @default(cuid())
   name       String
   color      String
   createdAt  DateTime    @default(now())
+  userId     String?
+  user       User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
   variations Variation[]
 }
 
@@ -37,14 +59,11 @@ model Move {
 }
 
 model Review {
-  id          String   @id @default(cuid())
-  ease        Float    @default(2.5)
-  interval    Int      @default(1)
-  repetitions Int      @default(0)
-  lapses      Int      @default(0)
-  nextReview  DateTime @default(now())
-  lastReview  DateTime @default(now())
-  createdAt   DateTime @default(now())
-  moveId      String   @unique
-  move        Move     @relation(fields: [moveId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
+  level      Int      @default(0)
+  nextReview DateTime @default(now())
+  lastReview DateTime @default(now())
+  createdAt  DateTime @default(now())
+  moveId     String   @unique
+  move       Move     @relation(fields: [moveId], references: [id], onDelete: Cascade)
 }

@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { Chess, Square } from "chess.js";
-import { gradeFromAttempts } from "@/lib/sm2";
+import { nextState, levelLabel } from "@/lib/srs";
 
 const Chessboard = dynamic(
   () => import("react-chessboard").then((m) => m.Chessboard),
@@ -22,6 +22,7 @@ export type ReviewMove = {
   fen: string; // position AFTER this move
   comment: string | null;
   isUserMove: boolean;
+  level: number; // current SRS level (0 = new)
 };
 
 export type ReviewLine = {
@@ -49,7 +50,7 @@ export default function ReviewSession({
   const [fen, setFen] = useState(STARTING_FEN);
   const [attempts, setAttempts] = useState(0);
   const [revealed, setRevealed] = useState(false);
-  const [graded, setGraded] = useState({ good: 0, hard: 0, again: 0 });
+  const [graded, setGraded] = useState({ correct: 0, wrong: 0, leveledUp: 0 });
   const [highlights, setHighlights] = useState<Record<string, object>>({});
   const [selectedSq, setSel] = useState<string | null>(null);
   const [flashSq, setFlashSq] = useState<string | null>(null);
@@ -87,17 +88,17 @@ export default function ReviewSession({
     return () => clearTimeout(t);
   }, [lineIdx, moveIdx]);
 
-  function persistGrade(move: ReviewMove, wrongAttempts: number) {
-    const quality = gradeFromAttempts(wrongAttempts);
+  function persistGrade(move: ReviewMove, correct: boolean) {
+    const promoted = nextState(move.level ?? 0, correct).promoted;
     setGraded((g) => ({
-      good: g.good + (quality >= 4 ? 1 : 0),
-      hard: g.hard + (quality === 3 ? 1 : 0),
-      again: g.again + (quality < 3 ? 1 : 0),
+      correct: g.correct + (correct ? 1 : 0),
+      wrong: g.wrong + (correct ? 0 : 1),
+      leveledUp: g.leveledUp + (promoted ? 1 : 0),
     }));
     fetch("/api/review", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ moveId: move.moveId, quality }),
+      body: JSON.stringify({ moveId: move.moveId, correct }),
     }).catch(console.error);
   }
 
@@ -110,7 +111,8 @@ export default function ReviewSession({
     if (!result) return false;
 
     if (result.san === expected.san) {
-      persistGrade(expected, revealed ? 99 : attempts);
+      // Correct only when recalled on the first try without peeking.
+      persistGrade(expected, attempts === 0 && !revealed);
       setFen(expected.fen);
       setMoveIdx((i) => i + 1);
       setAttempts(0);
@@ -217,9 +219,9 @@ export default function ReviewSession({
             <div style={{ fontSize: 40 }}>✓</div>
             <h2 style={{ fontSize: 32, margin: 0, color: "var(--success)" }}>Session complete</h2>
             <div style={{ display: "flex", gap: 28, fontSize: 15, color: "var(--text-2)" }}>
-              <span><b style={{ color: "var(--success)" }}>{graded.good}</b> good</span>
-              <span><b style={{ color: "var(--info)" }}>{graded.hard}</b> hard</span>
-              <span><b style={{ color: "var(--danger)" }}>{graded.again}</b> again</span>
+              <span><b style={{ color: "var(--success)" }}>{graded.correct}</b> correct</span>
+              <span><b style={{ color: "var(--danger)" }}>{graded.wrong}</b> to relearn</span>
+              {graded.leveledUp > 0 && <span><b style={{ color: "var(--accent)" }}>{graded.leveledUp}</b> leveled up</span>}
             </div>
             <div style={{ display: "flex", gap: 12, marginTop: 10 }}>
               <button
@@ -262,8 +264,15 @@ export default function ReviewSession({
 
             {/* Right panel: variation, move, answer */}
             <div style={{ width: 300, flexShrink: 0, display: "flex", flexDirection: "column", gap: 18 }}>
-              <div style={{ fontFamily: "var(--font-display)", fontSize: 24, color: "var(--text)", lineHeight: 1.15 }}>
-                {line?.variationName}
+              <div>
+                <div style={{ fontFamily: "var(--font-display)", fontSize: 24, color: "var(--text)", lineHeight: 1.15 }}>
+                  {line?.variationName}
+                </div>
+                {isUserTurn && expected && (
+                  <div style={{ fontSize: 13, color: "var(--text-3)", marginTop: 6 }}>
+                    {expected.level === 0 ? "New move" : `Level ${expected.level} / 8 · ${levelLabel(expected.level)}`}
+                  </div>
+                )}
               </div>
 
               <div style={{ padding: "18px 20px", background: "var(--panel)", borderRadius: 10, border: "1px solid var(--border)" }}>

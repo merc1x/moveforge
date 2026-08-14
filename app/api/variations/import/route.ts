@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { auth } from "@/auth";
+import { ownsRepertoire } from "@/lib/ownership";
 
 type ImportMove = {
   fen: string;
@@ -17,6 +19,10 @@ type ImportGame = {
 
 export async function POST(req: Request) {
   try {
+    const session = await auth();
+    if (!session?.user?.id)
+      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+
     const { repertoireId, games } = (await req.json()) as {
       repertoireId: string;
       games: ImportGame[];
@@ -25,8 +31,7 @@ export async function POST(req: Request) {
     if (!repertoireId || !Array.isArray(games) || games.length === 0)
       return NextResponse.json({ error: "repertoireId and games required." }, { status: 400 });
 
-    const repertoire = await prisma.repertoire.findFirst({ where: { id: repertoireId } });
-    if (!repertoire)
+    if (!(await ownsRepertoire(session.user.id, repertoireId)))
       return NextResponse.json({ error: "Repertoire not found." }, { status: 404 });
 
     for (const g of games) {

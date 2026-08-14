@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import ThemeToggle from "./ThemeToggle";
 
 type Repertoire = {
@@ -12,7 +13,7 @@ type Repertoire = {
   dueCount: number;
 };
 
-export default function RepertoireList({ repertoires: initial }: { repertoires: Repertoire[] }) {
+export default function RepertoireList({ repertoires: initial, userInitial }: { repertoires: Repertoire[]; userInitial: string }) {
   const router = useRouter();
   const [repertoires, setRepertoires] = useState(initial);
   const [showForm, setShowForm] = useState(false);
@@ -74,7 +75,21 @@ export default function RepertoireList({ repertoires: initial }: { repertoires: 
           <div style={{ fontFamily: "var(--font-display)", fontSize: 19, fontWeight: 600, letterSpacing: "-0.01em" }}>
             MoveForge
           </div>
-          <ThemeToggle />
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <ThemeToggle />
+            <Link
+              href="/profile"
+              title="Profile"
+              style={{
+                width: 38, height: 38, borderRadius: "50%", display: "flex", alignItems: "center",
+                justifyContent: "center", background: "var(--accent)", color: "var(--accent-text)",
+                fontFamily: "var(--font-display)", fontSize: 17, fontWeight: 600, textDecoration: "none",
+                flexShrink: 0,
+              }}
+            >
+              {userInitial}
+            </Link>
+          </div>
         </div>
 
         {/* Masthead */}
@@ -150,7 +165,7 @@ export default function RepertoireList({ repertoires: initial }: { repertoires: 
                       fontSize: 15, cursor: "pointer", fontFamily: "inherit",
                     }}
                   >
-                    {c === "white" ? "♔ White" : "♚ Black"}
+                    {c === "white" ? "♔ White" : "♔ Black"}
                   </button>
                 ))}
               </div>
@@ -212,12 +227,14 @@ export default function RepertoireList({ repertoires: initial }: { repertoires: 
                 <div style={{
                   fontSize: 19, lineHeight: 1, width: 40, height: 40, flexShrink: 0,
                   display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 8,
-                  // piece colors, not theme colors — identical in both themes
+                  // piece colors, not theme colors — identical in both themes.
+                  // Square colour matches the repertoire side (light for white,
+                  // dark for black); the king contrasts so it stays visible.
                   background: r.color === "white" ? "#ede6d7" : "#191919",
                   border: `1px solid ${r.color === "white" ? "#c8b898" : "#3c3c3c"}`,
-                  color: r.color === "white" ? "#191919" : "#ede6d7",
+                  color: r.color === "white" ? "#1a1a1a" : "#f1e9d8",
                 }}>
-                  {r.color === "white" ? "♔" : "♚"}
+                  ♔
                 </div>
 
                 <div style={{ flex: 1, minWidth: 0 }}>
