@@ -204,8 +204,8 @@ export default function MoveTrainer({
             onSquareClick,
             boardStyle: { width: "100%", height: "100%" },
             animationDurationInMs: 120,
-            darkSquareStyle: { backgroundColor: "#4a3728" },
-            lightSquareStyle: { backgroundColor: "#c8b89a" },
+            darkSquareStyle: { backgroundColor: "#a87d54" },
+            lightSquareStyle: { backgroundColor: "#e3cdab" },
             squareStyles: sqStyles,
             boardOrientation: color === "black" ? "black" : "white",
             allowDragging: isUserMove

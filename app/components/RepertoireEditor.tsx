@@ -804,8 +804,8 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
                     onSquareClick,
                     boardStyle: { width: "100%", height: "100%" },
                     animationDurationInMs: 80,
-                    darkSquareStyle: { backgroundColor: "#4a3728" },
-                    lightSquareStyle: { backgroundColor: "#c8b89a" },
+                    darkSquareStyle: { backgroundColor: "#a87d54" },
+                    lightSquareStyle: { backgroundColor: "#e3cdab" },
                     squareStyles: sqStyles,
                     boardOrientation: repertoire.color === "black" ? "black" : "white"
                   }}
