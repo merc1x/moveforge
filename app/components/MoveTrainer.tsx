@@ -35,7 +35,7 @@ export default function MoveTrainer({
   onNext,
   mode = "train",
   onTrain = null,
-  onMovePlayed = null,
+  onMovePlayed = null
 }: {
   variation: Variation;
   color: string;
@@ -102,7 +102,7 @@ export default function MoveTrainer({
         background: game.get(m.to as Square)
           ? "radial-gradient(circle, #00000080 58%, transparent 60%)"
           : "radial-gradient(circle, #00000060 34%, transparent 36%)",
-        borderRadius: "50%",
+        borderRadius: "50%"
       };
     });
     setHighlights(h);
@@ -155,7 +155,7 @@ export default function MoveTrainer({
     sqStyles[expected.fromSq] = { background: "#6699cc45" };
     if (learn) {
       sqStyles[expected.toSq] = {
-        background: "radial-gradient(circle, #6699cc70 30%, transparent 34%)",
+        background: "radial-gradient(circle, #6699cc70 30%, transparent 34%)"
       };
     }
   }
@@ -190,8 +190,7 @@ export default function MoveTrainer({
 
   const btnStyle = {
     flex: 1, padding: "9px 0", background: "transparent", border: "1px solid var(--border)",
-    color: "var(--text-3)", fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase",
-    cursor: "pointer", borderRadius: 3, fontFamily: "inherit",
+    color: "var(--text-3)", fontSize: 11, cursor: "pointer", borderRadius: 3, fontFamily: "inherit"
   };
 
   return (
@@ -209,15 +208,15 @@ export default function MoveTrainer({
             lightSquareStyle: { backgroundColor: "#c8b89a" },
             squareStyles: sqStyles,
             boardOrientation: color === "black" ? "black" : "white",
-            allowDragging: isUserMove,
+            allowDragging: isUserMove
           }}
         />
         {finished && (
           <div style={{
             position: "absolute", inset: 0, background: "var(--overlay)",
-            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14,
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14
           }}>
-            <div style={{ fontSize: 15, fontWeight: 600, color: "var(--success)", letterSpacing: "0.05em" }}>
+            <div style={{ fontSize: 15, fontWeight: 600, color: "var(--success)" }}>
               ✓ {learn ? "Variation learned" : "Variation complete"}
             </div>
             <div style={{ fontSize: 12, color: "var(--text-2)" }}>
@@ -231,8 +230,7 @@ export default function MoveTrainer({
                   onClick={onTrain}
                   style={{
                     padding: "9px 20px", background: "var(--accent)", border: "none", borderRadius: 3,
-                    color: "var(--accent-text)", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em",
-                    textTransform: "uppercase", cursor: "pointer", fontFamily: "inherit",
+                    color: "var(--accent-text)", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit"
                   }}
                 >
                   Train it →
@@ -246,8 +244,7 @@ export default function MoveTrainer({
                   border: learn && onTrain ? "1px solid var(--accent-border)" : "none",
                   borderRadius: 3,
                   color: learn && onTrain ? "var(--accent)" : "var(--bg)",
-                  fontSize: 11, fontWeight: 700, letterSpacing: "0.1em",
-                  textTransform: "uppercase", cursor: "pointer", fontFamily: "inherit",
+                  fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit"
                 }}
               >
                 Repeat
@@ -258,7 +255,7 @@ export default function MoveTrainer({
                   style={{
                     padding: "9px 20px", background: "transparent", border: "1px solid var(--accent-border)",
                     borderRadius: 3, color: "var(--accent)", fontSize: 11, fontWeight: 700,
-                    letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer", fontFamily: "inherit",
+                    cursor: "pointer", fontFamily: "inherit"
                   }}
                 >
                   Next variation →
@@ -272,8 +269,7 @@ export default function MoveTrainer({
       <div style={{
         display: "flex", alignItems: "center", gap: 10, padding: "10px 14px",
         background: "var(--panel)", borderRadius: 4, border: "1px solid var(--border)",
-        fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase",
-      }}>
+        fontSize: 11 }}>
         <div style={{ width: 8, height: 8, borderRadius: "50%", background: statusDot, flexShrink: 0 }} />
         <span>{statusText}</span>
         <span style={{ marginLeft: "auto", color: "var(--text-3)", textTransform: "none" }}>
@@ -286,7 +282,7 @@ export default function MoveTrainer({
         <div style={{
           height: 56, boxSizing: "border-box", overflowY: "auto",
           padding: "9px 14px", background: "var(--panel)", border: "1px solid var(--border)",
-          borderRadius: 4, fontSize: 11, lineHeight: 1.6, color: "var(--comment)", fontStyle: "italic",
+          borderRadius: 4, fontSize: 11, lineHeight: 1.6, color: "var(--comment)", fontStyle: "italic"
         }}>
           {lastPlayed?.comment ?? ""}
         </div>

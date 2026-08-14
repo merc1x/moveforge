@@ -17,3 +17,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Internal server error." }, { status: 500 });
   }
 }
+
+export async function DELETE(req: Request) {
+  try {
+    const { id } = await req.json();
+    if (!id)
+      return NextResponse.json({ error: "id required." }, { status: 400 });
+
+    // Variations, moves and reviews are removed via onDelete: Cascade.
+    await prisma.repertoire.delete({ where: { id } });
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    console.error("DELETE /api/repertoires:", e);
+    return NextResponse.json({ error: "Internal server error." }, { status: 500 });
+  }
+}

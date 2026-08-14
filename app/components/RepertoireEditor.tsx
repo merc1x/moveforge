@@ -177,6 +177,8 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
   const [newVarName, setNewVarName] = useState("");
   const [showNewVar, setShowNewVar] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
   const [mode, setMode] = useState<"edit" | "learn" | "train">("edit");
   const [commentDraft, setCommentDraft] = useState("");
   const [learnNote, setLearnNote] = useState<Move | null>(null);
@@ -256,14 +258,14 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
           ...v,
           moves: v.moves.map((m) =>
             m.id === currentMove.id ? { ...m, comment: text || null } : m
-          ),
+          )
         };
       })
     );
     fetch("/api/moves", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: currentMove.id, comment: text || null }),
+      body: JSON.stringify({ id: currentMove.id, comment: text || null })
     }).catch(console.error);
   }
 
@@ -279,7 +281,7 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
         background: game.get(m.to as Square)
           ? "radial-gradient(circle, #00000080 58%, transparent 60%)"
           : "radial-gradient(circle, #00000060 34%, transparent 36%)",
-        borderRadius: "50%",
+        borderRadius: "50%"
       };
     });
     setHighlights(h);
@@ -314,7 +316,7 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
       fromSq: result.from,
       toSq: result.to,
       order: newOrder,
-      variationId: selectedId,
+      variationId: selectedId
     };
     const newMoves = [...moves.slice(0, currentIndex + 1), tempMove];
     setVariations((prev) =>
@@ -333,8 +335,8 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
         fromSq: result.from,
         toSq: result.to,
         order: newOrder,
-        variationId: selectedId,
-      }),
+        variationId: selectedId
+      })
     })
       .then((r) => r.json())
       .then((saved: Move) => {
@@ -358,7 +360,7 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
       const res = await fetch("/api/variations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, repertoireId: repertoire.id }),
+        body: JSON.stringify({ name, repertoireId: repertoire.id })
       });
       if (!res.ok) return;
       const created = await res.json();
@@ -370,6 +372,64 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
     } finally {
       setCreating(false);
     }
+  }
+
+  function startRename(v: Variation) {
+    setRenamingId(v.id);
+    setRenameDraft(v.name);
+  }
+
+  async function commitRename() {
+    const id = renamingId;
+    const name = renameDraft.trim();
+    setRenamingId(null);
+    if (!id || !name) return;
+    const original = variations.find((v) => v.id === id);
+    if (!original || original.name === name) return;
+    setVariations((prev) => prev.map((v) => (v.id === id ? { ...v, name } : v)));
+    fetch("/api/variations", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, name })
+    }).catch(console.error);
+  }
+
+  async function deleteVariation(v: Variation) {
+    if (!confirm(`Delete variation "${v.name}" and all its moves?`)) return;
+    setVariations((prev) => prev.filter((x) => x.id !== v.id));
+    if (selectedId === v.id) {
+      const remaining = variations.filter((x) => x.id !== v.id);
+      if (remaining[0]) selectVariation(remaining[0].id);
+      else { setSelectedId(null); setCurrentIndex(-1); setFen(STARTING_FEN); }
+    }
+    fetch("/api/variations", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: v.id })
+    }).catch(console.error);
+  }
+
+  // Delete the move at currentIndex and everything after it in the line.
+  function deleteMoveFrom() {
+    if (!selectedId || currentIndex < 0) return;
+    const move = moves[currentIndex];
+    if (!move) return;
+    const after = moves.length - currentIndex;
+    if (!confirm(`Delete "${move.san}"${after > 1 ? ` and the ${after - 1} move(s) after it` : ""}?`)) return;
+    const kept = moves.slice(0, currentIndex);
+    setVariations((prev) =>
+      prev.map((v) => (v.id === selectedId ? { ...v, moves: kept } : v))
+    );
+    const newIndex = currentIndex - 1;
+    setCurrentIndex(newIndex);
+    setFen(newIndex === -1 ? STARTING_FEN : kept[newIndex].fen);
+    setHighlights({});
+    setSel(null);
+    fetch("/api/moves", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: move.id })
+    }).catch(console.error);
   }
 
   async function importPgnFile(file: File) {
@@ -404,13 +464,13 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
                 fromSq: r.from,
                 toSq: r.to,
                 order: lineMoves.length + 1,
-                comment: comment || undefined,
+                comment: comment || undefined
               });
             }
           } catch { skipped++; return; }
           games.push({
             name: lines.length > 1 ? `${baseName} #${li + 1}` : baseName,
-            moves: lineMoves,
+            moves: lineMoves
           });
         });
       });
@@ -423,7 +483,7 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
       const res = await fetch("/api/variations/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ repertoireId: repertoire.id, games }),
+        body: JSON.stringify({ repertoireId: repertoire.id, games })
       });
       if (!res.ok) {
         setImportStatus({ kind: "error", text: "Import failed on the server." });
@@ -436,7 +496,7 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
         kind: "info",
         text: skipped
           ? `Imported ${created.length}, skipped ${skipped} game(s).`
-          : `Imported ${created.length} ${created.length === 1 ? "variation" : "variations"}.`,
+          : `Imported ${created.length} ${created.length === 1 ? "variation" : "variations"}.`
       });
     } catch (e) {
       console.error(e);
@@ -471,6 +531,10 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
 
   // ── Shared style helpers ──────────────────────────────────────────────────
   const border = "1px solid var(--border-soft)";
+  const iconBtn = {
+    background: "none", border: "none", cursor: "pointer", fontFamily: "inherit",
+    color: "var(--text-4)", fontSize: 14, lineHeight: 1, padding: "2px 4px", flexShrink: 0
+  } as const;
 
   function moveChip(moveIndex: number, san: string) {
     const active = moveIndex === currentIndex;
@@ -482,7 +546,7 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
           minWidth: 48, display: "inline-block",
           color: active ? "var(--accent)" : "var(--text-2)",
           background: active ? "var(--accent-soft)" : "transparent",
-          fontWeight: active ? 600 : 400,
+          fontWeight: active ? 600 : 400
         }}
       >
         {san}
@@ -494,7 +558,7 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
     <div style={{
       display: "flex", height: "100vh", overflow: "hidden",
       background: "var(--bg)", color: "var(--text)",
-      fontFamily: "'IBM Plex Mono', monospace",
+      fontFamily: "var(--font-body)"
     }}>
 
       {/* ── Left sidebar: variation list ─────────────────────────────────── */}
@@ -505,16 +569,26 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <button
               onClick={() => router.push("/")}
-              style={{ background: "none", border: "none", color: "var(--text-3)", fontSize: 11, cursor: "pointer", letterSpacing: "0.08em", textTransform: "uppercase", fontFamily: "inherit", padding: 0 }}
+              style={{ background: "none", border: "none", color: "var(--text-3)", fontSize: 11, cursor: "pointer", fontFamily: "inherit", padding: 0 }}
             >
               ← All Repertoires
             </button>
             <ThemeToggle />
           </div>
-          <div style={{ marginTop: 10, fontSize: 13, fontWeight: 600 }}>{repertoire.name}</div>
-          <div style={{ fontSize: 10, color: "var(--text-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginTop: 3 }}>
+          <div style={{ marginTop: 10, fontFamily: "var(--font-display)", fontSize: 20, color: "var(--text)" }}>{repertoire.name}</div>
+          <div style={{ fontSize: 12, color: "var(--text-3)", marginTop: 4 }}>
             {repertoire.color === "white" ? "♔ White" : "♚ Black"}
           </div>
+          <button
+            onClick={() => router.push(`/repertoire/${repertoire.id}/review`)}
+            style={{
+              marginTop: 12, width: "100%", padding: "8px 0", background: "transparent",
+              border: "1px solid var(--accent)", borderRadius: 3, color: "var(--accent)",
+              fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit"
+            }}
+          >
+            ⟳ Review due
+          </button>
         </div>
 
         {/* New variation */}
@@ -533,7 +607,7 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
                 style={{
                   background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 3,
                   padding: "7px 10px", color: "var(--text)", fontSize: 12,
-                  fontFamily: "inherit", outline: "none", width: "100%", boxSizing: "border-box",
+                  fontFamily: "inherit", outline: "none", width: "100%", boxSizing: "border-box"
                 }}
               />
               <div style={{ display: "flex", gap: 6 }}>
@@ -543,8 +617,8 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
                   style={{
                     flex: 1, padding: "8px 0", background: "var(--accent)", border: "none",
                     borderRadius: 3, color: "var(--accent-text)", fontSize: 11, fontWeight: 700,
-                    letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer",
-                    fontFamily: "inherit", opacity: (creating || !newVarName.trim()) ? 0.5 : 1,
+                    cursor: "pointer",
+                    fontFamily: "inherit", opacity: (creating || !newVarName.trim()) ? 0.5 : 1
                   }}
                 >
                   {creating ? "Creating…" : "Create"}
@@ -553,7 +627,7 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
                   onClick={() => { setShowNewVar(false); setNewVarName(""); }}
                   style={{
                     padding: "8px 12px", background: "transparent", border: "1px solid var(--border)",
-                    borderRadius: 3, color: "var(--text-3)", fontSize: 11, cursor: "pointer", fontFamily: "inherit",
+                    borderRadius: 3, color: "var(--text-3)", fontSize: 11, cursor: "pointer", fontFamily: "inherit"
                   }}
                 >
                   ✕
@@ -567,8 +641,8 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
                 style={{
                   width: "100%", padding: "8px 0", background: "var(--accent)", border: "none",
                   borderRadius: 3, color: "var(--accent-text)", fontSize: 11, fontWeight: 700,
-                  letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer",
-                  fontFamily: "inherit",
+                  cursor: "pointer",
+                  fontFamily: "inherit"
                 }}
               >
                 + New Variation
@@ -579,9 +653,8 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
                 style={{
                   width: "100%", padding: "8px 0", background: "transparent", border: "1px solid var(--border)",
                   borderRadius: 3, color: "var(--text-3)", fontSize: 11, fontWeight: 700,
-                  letterSpacing: "0.1em", textTransform: "uppercase",
                   cursor: importing ? "default" : "pointer", fontFamily: "inherit",
-                  opacity: importing ? 0.5 : 1,
+                  opacity: importing ? 0.5 : 1
                 }}
                 onMouseEnter={(e) => { if (!importing) { e.currentTarget.style.color = "var(--accent)"; e.currentTarget.style.borderColor = "var(--accent-border)"; } }}
                 onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-3)"; e.currentTarget.style.borderColor = "var(--border)"; }}
@@ -617,24 +690,63 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
           )}
           {variations.map((v) => {
             const active = v.id === selectedId;
+            const isRenaming = renamingId === v.id;
             return (
               <div
                 key={v.id}
-                onClick={() => selectVariation(v.id)}
+                onClick={() => { if (!isRenaming) selectVariation(v.id); }}
                 style={{
-                  padding: "10px 16px", cursor: "pointer",
+                  display: "flex", alignItems: "center", gap: 4,
+                  padding: "10px 10px 10px 16px", cursor: isRenaming ? "default" : "pointer",
                   borderLeft: active ? "2px solid var(--accent)" : "2px solid transparent",
-                  background: active ? "var(--accent-faint)" : "transparent",
+                  background: active ? "var(--accent-faint)" : "transparent"
                 }}
                 onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = "var(--hover)"; }}
                 onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = "transparent"; }}
               >
-                <div style={{ fontSize: 12, color: active ? "var(--text)" : "var(--text-2)", fontWeight: active ? 600 : 400 }}>
-                  {v.name}
-                </div>
-                <div style={{ fontSize: 10, color: "var(--text-4)", marginTop: 2 }}>
-                  {v.moves.length} {v.moves.length === 1 ? "move" : "moves"}
-                </div>
+                {isRenaming ? (
+                  <input
+                    autoFocus
+                    value={renameDraft}
+                    onChange={(e) => setRenameDraft(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") commitRename();
+                      if (e.key === "Escape") setRenamingId(null);
+                    }}
+                    onBlur={commitRename}
+                    style={{
+                      flex: 1, minWidth: 0, background: "var(--bg)", border: "1px solid var(--accent-border)",
+                      borderRadius: 3, padding: "4px 7px", color: "var(--text)", fontSize: 12,
+                      fontFamily: "inherit", outline: "none"
+                    }}
+                  />
+                ) : (
+                  <>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, color: active ? "var(--text)" : "var(--text-2)", fontWeight: active ? 600 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {v.name}
+                      </div>
+                      <div style={{ fontSize: 10, color: "var(--text-4)", marginTop: 2 }}>
+                        {Math.ceil(v.moves.length / 2)} {Math.ceil(v.moves.length / 2) === 1 ? "move" : "moves"}
+                      </div>
+                    </div>
+                    <button
+                      title="Rename"
+                      onClick={(e) => { e.stopPropagation(); startRename(v); }}
+                      style={iconBtn}
+                      onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-4)"; }}
+                    >✎</button>
+                    <button
+                      title="Delete variation"
+                      onClick={(e) => { e.stopPropagation(); deleteVariation(v); }}
+                      style={iconBtn}
+                      onMouseEnter={(e) => { e.currentTarget.style.color = "var(--danger)"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-4)"; }}
+                    >×</button>
+                  </>
+                )}
               </div>
             );
           })}
@@ -647,20 +759,19 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
           <div style={{ color: "var(--text-4)", fontSize: 13 }}>Select or create a variation to start</div>
         ) : (
           <>
-            <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-              <div style={{ fontSize: 11, color: "var(--text-4)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: 24, color: "var(--text)" }}>
                 {selectedVar.name}
               </div>
-              <div style={{ display: "flex", border: "1px solid var(--border)", borderRadius: 3, overflow: "hidden" }}>
+              <div style={{ display: "flex", border: "1px solid var(--border)", borderRadius: 999, overflow: "hidden" }}>
                 {(["edit", "learn", "train"] as const).map((m) => (
                   <button
                     key={m}
                     onClick={() => setMode(m)}
                     style={{
-                      padding: "5px 16px", border: "none", cursor: "pointer", fontFamily: "inherit",
-                      fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase",
-                      background: mode === m ? "var(--accent)" : "transparent",
-                      color: mode === m ? "var(--bg)" : "var(--text-3)",
+                      padding: "6px 18px", border: "none", cursor: "pointer", fontFamily: "inherit",
+                      fontSize: 13, fontWeight: 500, background: mode === m ? "var(--accent)" : "transparent",
+                      color: mode === m ? "var(--accent-text)" : "var(--text-3)"
                     }}
                   >
                     {m === "edit" ? "Edit" : m === "learn" ? "Learn" : "Train"}
@@ -692,7 +803,7 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
                     darkSquareStyle: { backgroundColor: "#4a3728" },
                     lightSquareStyle: { backgroundColor: "#c8b89a" },
                     squareStyles: sqStyles,
-                    boardOrientation: repertoire.color === "black" ? "black" : "white",
+                    boardOrientation: repertoire.color === "black" ? "black" : "white"
                   }}
                 />
               </div>
@@ -708,7 +819,7 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
                   onClick={fn}
                   style={{
                     flex: 1, padding: "9px 0", background: "transparent", border: "1px solid var(--border)",
-                    color: "var(--text-3)", fontSize: 14, cursor: "pointer", borderRadius: 3, fontFamily: "inherit",
+                    color: "var(--text-3)", fontSize: 14, cursor: "pointer", borderRadius: 3, fontFamily: "inherit"
                   }}
                   onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; e.currentTarget.style.borderColor = "var(--accent-border)"; }}
                   onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-3)"; e.currentTarget.style.borderColor = "var(--border)"; }}
@@ -726,14 +837,14 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
       {/* ── Right sidebar: move list (hidden while training — it would reveal answers) ── */}
       {mode !== "train" && (
       <div style={{ width: 260, flexShrink: 0, borderLeft: border, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        <div style={{ padding: "10px 14px", borderBottom: border, fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: "var(--text-4)" }}>
+        <div style={{ padding: "10px 14px", borderBottom: border, fontSize: 10, color: "var(--text-4)" }}>
           Move List
         </div>
 
         {/* Learn mode: notes for the move just played */}
         {mode === "learn" && (
           <div style={{ borderBottom: border, padding: "12px 14px", minHeight: 96, boxSizing: "border-box" }}>
-            <div style={{ fontSize: 9, letterSpacing: "0.15em", textTransform: "uppercase", color: "var(--text-4)", marginBottom: 6 }}>
+            <div style={{ fontSize: 11, color: "var(--text-4)", marginBottom: 6 }}>
               Notes{learnNote ? ` · ${learnNote.san}` : ""}
             </div>
             <div style={{ fontSize: 11, lineHeight: 1.6, color: "var(--comment)", fontStyle: "italic" }}>
@@ -751,7 +862,7 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
             style={{
               padding: "3px 12px", cursor: "pointer", fontSize: 11, borderRadius: 3, margin: "0 4px",
               color: currentIndex === -1 ? "var(--accent)" : "var(--text-4)",
-              background: currentIndex === -1 ? "var(--accent-faint)" : "transparent",
+              background: currentIndex === -1 ? "var(--accent-faint)" : "transparent"
             }}
           >
             Start
@@ -761,7 +872,7 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
           {movePairs.map(({ num, white, black }, pairIdx) => {
             const commentStyle = {
               padding: "1px 12px 4px 30px", fontSize: 10, lineHeight: 1.5,
-              color: "var(--comment)", fontStyle: "italic" as const,
+              color: "var(--comment)", fontStyle: "italic" as const
             };
             const both = white.comment && black?.comment;
             return (
@@ -793,7 +904,7 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
         {/* Comment editor for the selected move (edit mode only) */}
         {mode === "edit" && currentMove && (
           <div style={{ borderTop: border, padding: "10px 12px" }}>
-            <div style={{ fontSize: 9, letterSpacing: "0.15em", textTransform: "uppercase", color: "var(--text-4)", marginBottom: 6 }}>
+            <div style={{ fontSize: 11, color: "var(--text-4)", marginBottom: 6 }}>
               Comment · {Math.ceil((currentIndex + 1) / 2)}.{currentIndex % 2 === 0 ? "" : ".."} {currentMove.san}
             </div>
             <textarea
@@ -806,9 +917,21 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
                 width: "100%", boxSizing: "border-box", background: "var(--bg)",
                 border: "1px solid var(--border)", borderRadius: 3, color: "var(--text-2)",
                 fontSize: 11, lineHeight: 1.5, fontFamily: "inherit", outline: "none",
-                resize: "vertical", padding: "6px 8px",
+                resize: "vertical", padding: "6px 8px"
               }}
             />
+            <button
+              onClick={deleteMoveFrom}
+              style={{
+                marginTop: 8, width: "100%", padding: "7px 0", background: "transparent",
+                border: "1px solid var(--border)", borderRadius: 3, color: "var(--text-3)",
+                fontSize: 10, cursor: "pointer", fontFamily: "inherit"
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = "var(--danger)"; e.currentTarget.style.borderColor = "var(--danger)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-3)"; e.currentTarget.style.borderColor = "var(--border)"; }}
+            >
+              ✕ Delete move {currentIndex < moves.length - 1 ? "& all after" : ""}
+            </button>
           </div>
         )}
       </div>

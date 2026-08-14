@@ -62,3 +62,25 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Internal server error." }, { status: 500 });
   }
 }
+
+// Delete a move and every move after it in the same variation (a linear line
+// can't keep moves whose preceding position no longer exists). Reviews cascade.
+export async function DELETE(req: Request) {
+  try {
+    const { id } = await req.json();
+    if (!id)
+      return NextResponse.json({ error: "id required." }, { status: 400 });
+
+    const move = await prisma.move.findFirst({ where: { id } });
+    if (!move)
+      return NextResponse.json({ error: "Move not found." }, { status: 404 });
+
+    const { count } = await prisma.move.deleteMany({
+      where: { variationId: move.variationId, order: { gte: move.order } },
+    });
+    return NextResponse.json({ ok: true, deleted: count });
+  } catch (e) {
+    console.error("DELETE /api/moves:", e);
+    return NextResponse.json({ error: "Internal server error." }, { status: 500 });
+  }
+}

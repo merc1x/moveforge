@@ -5,62 +5,84 @@
 }
 
 /* ── Theme tokens ──────────────────────────────────────────────────────────
-   Board wood colors are intentionally NOT tokens — the board looks right in
-   both themes and acts as the visual anchor. */
+   Editorial direction: warm paper light theme (default), ink-blue accent,
+   Fraunces display serif + Inter body. Board wood colors are intentionally
+   NOT tokens — the board is the visual anchor in both themes. */
 
 :root,
-[data-theme="dark"] {
-  --bg: #1c1a17;
-  --panel: #26231f;
-  --border: #3a352e;
-  --border-soft: #322d27;
-  --border-hover: #4a443a;
-  --overlay: #1c1a17d9;
-  --text: #ece5d8;
-  --text-2: #b5ab98;
-  --text-3: #978d7b;
-  --text-4: #6e6557;
-  --comment: #a39782;
-  --accent: #c8a96e;
-  --accent-text: #1c1a17;
-  --accent-soft: #c8a96e26;
-  --accent-faint: #c8a96e14;
-  --accent-border: #c8a96e55;
-  --hover: #ffffff0a;
-  --success: #6cc06c;
-  --danger: #e05c52;
-  --info: #7aa7d4;
-  --info-border: #7aa7d455;
-  --board-shadow: 0 0 0 1px #3a352e, 0 20px 56px #00000070;
+[data-theme="light"] {
+  --bg: #faf7f1;
+  --panel: #fffefb;
+  --border: #e7e0d2;
+  --border-soft: #efe9dd;
+  --border-hover: #d4cab4;
+  --overlay: #faf7f1e6;
+  --text: #1c1a17;
+  --text-2: #44403a;
+  --text-3: #6c665c;
+  --text-4: #9b9486;
+  --comment: #5c564c;
+  --accent: #2f4a8a;
+  --accent-text: #fbfaf6;
+  --accent-soft: #2f4a8a14;
+  --accent-faint: #2f4a8a0a;
+  --accent-border: #2f4a8a3d;
+  --hover: #00000007;
+  --success: #2e7d4f;
+  --danger: #b3403a;
+  --info: #2f4a8a;
+  --info-border: #2f4a8a55;
+  --board-shadow: 0 1px 3px #00000010, 0 16px 40px #00000016;
 }
 
-[data-theme="light"] {
-  --bg: #efe9dd;
-  --panel: #f8f4ec;
-  --border: #d9d0bf;
-  --border-soft: #e3dccc;
-  --border-hover: #c4b89f;
-  --overlay: #efe9dde0;
-  --text: #2a2620;
-  --text-2: #57503f;
-  --text-3: #6f664f;
-  --text-4: #998f78;
-  --comment: #6f664f;
-  --accent: #a8854a;
-  --accent-text: #fdf9f0;
-  --accent-soft: #a8854a26;
-  --accent-faint: #a8854a14;
-  --accent-border: #a8854a66;
-  --hover: #00000008;
-  --success: #2e7d32;
-  --danger: #b3403a;
-  --info: #3d6ea5;
-  --info-border: #3d6ea555;
-  --board-shadow: 0 0 0 1px #d9d0bf, 0 16px 40px #00000026;
+[data-theme="dark"] {
+  --bg: #14141a;
+  --panel: #1d1d25;
+  --border: #2e2e3a;
+  --border-soft: #26262f;
+  --border-hover: #3d3d4c;
+  --overlay: #14141ae0;
+  --text: #f0ede6;
+  --text-2: #c2bdb2;
+  --text-3: #948e82;
+  --text-4: #6a6a78;
+  --comment: #a39b8c;
+  --accent: #8aa6e6;
+  --accent-text: #14141a;
+  --accent-soft: #8aa6e622;
+  --accent-faint: #8aa6e614;
+  --accent-border: #8aa6e655;
+  --hover: #ffffff0a;
+  --success: #6cc08a;
+  --danger: #e2716a;
+  --info: #8aa6e6;
+  --info-border: #8aa6e655;
+  --board-shadow: 0 0 0 1px #2e2e3a, 0 20px 56px #00000070;
 }
 
 html,
 body {
+  height: 100%;
   background: var(--bg);
   color: var(--text);
+}
+
+body {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-body), system-ui, -apple-system, sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display), Georgia, "Times New Roman", serif;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
 }

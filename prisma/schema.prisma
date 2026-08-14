@@ -18,7 +18,7 @@ model Variation {
   id           String     @id @default(cuid())
   name         String
   repertoireId String
-  repertoire   Repertoire @relation(fields: [repertoireId], references: [id])
+  repertoire   Repertoire @relation(fields: [repertoireId], references: [id], onDelete: Cascade)
   moves        Move[]
   createdAt    DateTime   @default(now())
 }
@@ -32,8 +32,8 @@ model Move {
   order       Int
   comment     String?
   variationId String
-  variation   Variation @relation(fields: [variationId], references: [id])
-  reviews     Review[]
+  variation   Variation @relation(fields: [variationId], references: [id], onDelete: Cascade)
+  review      Review?
 }
 
 model Review {
@@ -41,8 +41,10 @@ model Review {
   ease        Float    @default(2.5)
   interval    Int      @default(1)
   repetitions Int      @default(0)
+  lapses      Int      @default(0)
   nextReview  DateTime @default(now())
+  lastReview  DateTime @default(now())
   createdAt   DateTime @default(now())
-  moveId      String
-  move        Move     @relation(fields: [moveId], references: [id])
+  moveId      String   @unique
+  move        Move     @relation(fields: [moveId], references: [id], onDelete: Cascade)
 }

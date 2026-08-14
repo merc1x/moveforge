@@ -9,6 +9,7 @@ type Repertoire = {
   name: string;
   color: string;
   createdAt: Date;
+  dueCount: number;
 };
 
 export default function RepertoireList({ repertoires: initial }: { repertoires: Repertoire[] }) {
@@ -19,6 +20,8 @@ export default function RepertoireList({ repertoires: initial }: { repertoires: 
   const [color, setColor] = useState<"white" | "black">("white");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const totalDue = repertoires.reduce((s, r) => s + r.dueCount, 0);
 
   async function handleCreate(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -40,66 +43,111 @@ export default function RepertoireList({ repertoires: initial }: { repertoires: 
     }
 
     const created = await res.json();
-    setRepertoires((prev) => [created, ...prev]);
+    setRepertoires((prev) => [{ ...created, dueCount: 0 }, ...prev]);
     setName("");
     setColor("white");
     setShowForm(false);
   }
 
-  return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text)", fontFamily: "'IBM Plex Mono', monospace", padding: 40 }}>
-      <div style={{ maxWidth: 720, margin: "0 auto" }}>
+  async function handleDelete(r: Repertoire) {
+    if (!confirm(`Delete "${r.name}" and all its variations? This cannot be undone.`)) return;
+    setRepertoires((prev) => prev.filter((x) => x.id !== r.id));
+    fetch("/api/repertoires", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: r.id }),
+    }).catch(console.error);
+  }
 
-        {/* Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}>
-          <div>
-            <div style={{ fontSize: 10, letterSpacing: "0.2em", textTransform: "uppercase", color: "var(--text-3)", marginBottom: 6 }}>
-              MoveForge
-            </div>
-            <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0, color: "var(--text)" }}>My Repertoires</h1>
+  const deck =
+    repertoires.length === 0
+      ? "Build your first opening repertoire to begin."
+      : `${repertoires.length} ${repertoires.length === 1 ? "repertoire" : "repertoires"}` +
+        (totalDue ? ` · ${totalDue} ${totalDue === 1 ? "move" : "moves"} due today` : " · all caught up");
+
+  return (
+    <div style={{ minHeight: "100vh", padding: "0 24px 80px" }}>
+      <div style={{ maxWidth: 760, margin: "0 auto" }}>
+
+        {/* Top bar */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 28 }}>
+          <div style={{ fontFamily: "var(--font-display)", fontSize: 19, fontWeight: 600, letterSpacing: "-0.01em" }}>
+            MoveForge
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <ThemeToggle />
-            <button
-              onClick={() => { setShowForm(!showForm); setError(null); }}
-              style={{ padding: "10px 20px", background: "var(--accent)", border: "none", borderRadius: 4, color: "var(--accent-text)", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer", fontFamily: "inherit" }}
-            >
-              + New Repertoire
-            </button>
-          </div>
+          <ThemeToggle />
         </div>
 
-        {/* Neues Repertoire Formular */}
-        {showForm && (
-          <form onSubmit={handleCreate} style={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 6, padding: 24, marginBottom: 28, display: "flex", flexDirection: "column", gap: 16 }}>
-            <div style={{ fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: "var(--text-3)" }}>
-              New Repertoire
-            </div>
+        {/* Masthead */}
+        <header style={{ paddingTop: 64, paddingBottom: 28 }}>
+          <div style={{ color: "var(--accent)", fontSize: 14, fontWeight: 600, marginBottom: 14 }}>
+            Your opening study
+          </div>
+          <h1 style={{ fontSize: "clamp(42px, 7vw, 66px)", margin: 0, color: "var(--text)" }}>
+            Repertoires
+          </h1>
+          <p style={{ marginTop: 16, color: "var(--text-3)", fontSize: 16, maxWidth: 460 }}>
+            {deck}
+          </p>
+        </header>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <label style={{ fontSize: 11, color: "var(--text-3)", letterSpacing: "0.08em" }}>Name</label>
+        {/* New repertoire */}
+        {!showForm && (
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+            <button
+              onClick={() => { setShowForm(true); setError(null); }}
+              style={{
+                background: "transparent", border: "1px solid var(--accent-border)", borderRadius: 999,
+                color: "var(--accent)", fontSize: 14, fontWeight: 500, padding: "9px 20px",
+                cursor: "pointer", fontFamily: "inherit",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent-soft)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+            >
+              + New repertoire
+            </button>
+          </div>
+        )}
+
+        {/* Create form */}
+        {showForm && (
+          <form
+            onSubmit={handleCreate}
+            style={{
+              background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12,
+              padding: 28, marginBottom: 28, display: "flex", flexDirection: "column", gap: 20,
+            }}
+          >
+            <h2 style={{ fontSize: 26, margin: 0, color: "var(--text)" }}>New repertoire</h2>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <label style={{ fontSize: 14, color: "var(--text-2)" }}>Name</label>
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
+                autoFocus
                 placeholder="e.g. Sicilian as White"
-                style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 3, padding: "8px 12px", color: "var(--text)", fontSize: 12, fontFamily: "inherit", outline: "none" }}
+                style={{
+                  background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8,
+                  padding: "11px 14px", color: "var(--text)", fontSize: 15, fontFamily: "inherit", outline: "none",
+                }}
               />
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <label style={{ fontSize: 11, color: "var(--text-3)", letterSpacing: "0.08em" }}>I play as</label>
-              <div style={{ display: "flex", gap: 10 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <label style={{ fontSize: 14, color: "var(--text-2)" }}>I play as</label>
+              <div style={{ display: "flex", gap: 12 }}>
                 {(["white", "black"] as const).map((c) => (
                   <button
                     key={c}
                     type="button"
                     onClick={() => setColor(c)}
                     style={{
-                      flex: 1, padding: "10px 0", borderRadius: 3, border: `1px solid ${color === c ? "var(--accent)" : "var(--border)"}`,
+                      flex: 1, padding: "12px 0", borderRadius: 8,
+                      border: `1px solid ${color === c ? "var(--accent)" : "var(--border)"}`,
                       background: color === c ? "var(--accent-soft)" : "transparent",
                       color: color === c ? "var(--accent)" : "var(--text-3)",
-                      fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer", fontFamily: "inherit",
+                      fontSize: 15, cursor: "pointer", fontFamily: "inherit",
                     }}
                   >
                     {c === "white" ? "♔ White" : "♚ Black"}
@@ -108,20 +156,27 @@ export default function RepertoireList({ repertoires: initial }: { repertoires: 
               </div>
             </div>
 
-            {error && <p style={{ color: "var(--danger)", fontSize: 12, margin: 0 }}>{error}</p>}
+            {error && <p style={{ color: "var(--danger)", fontSize: 14, margin: 0 }}>{error}</p>}
 
-            <div style={{ display: "flex", gap: 10 }}>
+            <div style={{ display: "flex", gap: 12 }}>
               <button
                 type="submit"
                 disabled={loading}
-                style={{ flex: 1, padding: "10px 0", background: "var(--accent)", border: "none", borderRadius: 3, color: "var(--accent-text)", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer", fontFamily: "inherit", opacity: loading ? 0.6 : 1 }}
+                style={{
+                  flex: 1, padding: "12px 0", background: "var(--accent)", border: "none", borderRadius: 8,
+                  color: "var(--accent-text)", fontSize: 15, fontWeight: 600, cursor: "pointer",
+                  fontFamily: "inherit", opacity: loading ? 0.6 : 1,
+                }}
               >
-                {loading ? "Creating…" : "Create"}
+                {loading ? "Creating…" : "Create repertoire"}
               </button>
               <button
                 type="button"
-                onClick={() => setShowForm(false)}
-                style={{ padding: "10px 20px", background: "transparent", border: "1px solid var(--border)", borderRadius: 3, color: "var(--text-3)", fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer", fontFamily: "inherit" }}
+                onClick={() => { setShowForm(false); setError(null); }}
+                style={{
+                  padding: "12px 22px", background: "transparent", border: "1px solid var(--border)",
+                  borderRadius: 8, color: "var(--text-3)", fontSize: 15, cursor: "pointer", fontFamily: "inherit",
+                }}
               >
                 Cancel
               </button>
@@ -129,44 +184,87 @@ export default function RepertoireList({ repertoires: initial }: { repertoires: 
           </form>
         )}
 
-        {/* Repertoire Liste */}
+        {/* Empty state */}
         {repertoires.length === 0 && !showForm && (
-          <div style={{ textAlign: "center", padding: "60px 0", color: "var(--text-4)", fontSize: 13 }}>
-            No repertoires yet. Create your first one!
+          <div style={{ textAlign: "center", padding: "72px 0", color: "var(--text-4)", fontSize: 16 }}>
+            Nothing here yet.
           </div>
         )}
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {repertoires.map((r) => (
-            <div
-              key={r.id}
-              onClick={() => router.push(`/repertoire/${r.id}`)}
-              style={{ display: "flex", alignItems: "center", gap: 16, padding: "16px 20px", background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 4, cursor: "pointer", transition: "border-color 0.15s" }}
-              onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
-              onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
-            >
-              <div style={{
-                fontSize: 20, lineHeight: 1,
-                width: 36, height: 36, flexShrink: 0,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                borderRadius: 4,
-                // piece colors, not theme colors — identical in both themes
-                background: r.color === "white" ? "#ede6d7" : "#191919",
-                border: `1px solid ${r.color === "white" ? "#c8b898" : "#3c3c3c"}`,
-                color: r.color === "white" ? "#191919" : "#ede6d7",
-              }}>
-                {r.color === "white" ? "♔" : "♚"}
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", marginBottom: 4 }}>{r.name}</div>
-                <div style={{ fontSize: 10, color: "var(--text-4)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
-                  {r.color === "white" ? "White" : "Black"} · {new Date(r.createdAt).toLocaleDateString("en-US")}
+        {/* Repertoire index — table-of-contents style */}
+        {repertoires.length > 0 && (
+          <div style={{ borderTop: "1px solid var(--border)" }}>
+            {repertoires.map((r, i) => (
+              <div
+                key={r.id}
+                onClick={() => router.push(`/repertoire/${r.id}`)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 18,
+                  padding: "22px 6px", borderBottom: "1px solid var(--border)", cursor: "pointer",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hover)")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+              >
+                <div style={{ fontFamily: "var(--font-display)", fontSize: 16, color: "var(--text-4)", width: 26, flexShrink: 0 }}>
+                  {String(i + 1).padStart(2, "0")}
                 </div>
+
+                <div style={{
+                  fontSize: 19, lineHeight: 1, width: 40, height: 40, flexShrink: 0,
+                  display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 8,
+                  // piece colors, not theme colors — identical in both themes
+                  background: r.color === "white" ? "#ede6d7" : "#191919",
+                  border: `1px solid ${r.color === "white" ? "#c8b898" : "#3c3c3c"}`,
+                  color: r.color === "white" ? "#191919" : "#ede6d7",
+                }}>
+                  {r.color === "white" ? "♔" : "♚"}
+                </div>
+
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    fontFamily: "var(--font-display)", fontSize: 21, color: "var(--text)", marginBottom: 3,
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}>
+                    {r.name}
+                  </div>
+                  <div style={{ fontSize: 13, color: "var(--text-4)" }}>
+                    {r.color === "white" ? "White" : "Black"} · added {new Date(r.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                  </div>
+                </div>
+
+                {r.dueCount > 0 ? (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); router.push(`/repertoire/${r.id}/review`); }}
+                    style={{
+                      flexShrink: 0, padding: "8px 16px", background: "var(--accent)", border: "none",
+                      borderRadius: 999, color: "var(--accent-text)", fontSize: 14, fontWeight: 600,
+                      cursor: "pointer", fontFamily: "inherit",
+                    }}
+                  >
+                    {r.dueCount} due →
+                  </button>
+                ) : (
+                  <span style={{ flexShrink: 0, fontSize: 13, color: "var(--text-4)" }}>
+                    Up to date
+                  </span>
+                )}
+
+                <button
+                  title="Delete repertoire"
+                  onClick={(e) => { e.stopPropagation(); handleDelete(r); }}
+                  style={{
+                    flexShrink: 0, background: "none", border: "none", cursor: "pointer",
+                    color: "var(--text-4)", fontSize: 20, lineHeight: 1, padding: "4px 6px", fontFamily: "inherit",
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = "var(--danger)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-4)"; }}
+                >
+                  ×
+                </button>
               </div>
-              <div style={{ color: "var(--text-4)", fontSize: 16 }}>›</div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
       </div>
     </div>
