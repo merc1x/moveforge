@@ -64,10 +64,26 @@ export default function ProfileView({ data }: { data: ProfileData }) {
     }
   }
 
+  // Clear the session, then navigate ourselves. Letting Auth.js do the redirect
+  // means following the absolute URL it builds from the request host — behind a
+  // proxy that host is not always the one the browser is on, and the navigation
+  // lands on a 404. A relative path always resolves against the current origin.
+  async function leave() {
+    try {
+      await signOut({ redirect: false });
+    } finally {
+      window.location.href = "/login";
+    }
+  }
+
   async function deleteAccount() {
     if (!confirm("Delete your account and ALL your repertoires? This cannot be undone.")) return;
     const res = await fetch("/api/account", { method: "DELETE" });
-    if (res.ok) signOut({ callbackUrl: "/login" });
+    if (!res.ok) {
+      setPwMsg({ kind: "err", text: "Could not delete your account. Please try again." });
+      return;
+    }
+    await leave();
   }
 
   const nextReviewLabel = (() => {
@@ -253,7 +269,7 @@ export default function ProfileView({ data }: { data: ProfileData }) {
 
           <div style={{ display: "flex", gap: 16, alignItems: "center", marginTop: 24 }}>
             <button
-              onClick={() => signOut({ callbackUrl: "/login" })}
+              onClick={leave}
               style={{ padding: "10px 20px", background: "transparent", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text-2)", fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}
             >
               Sign out
