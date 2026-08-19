@@ -4,6 +4,8 @@
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { Chess, Square } from "chess.js";
+import PromotionPicker from "./PromotionPicker";
+import { isPromotion, sideToMove, type PromotionPiece } from "@/lib/chess";
 
 const Chessboard = dynamic(
   () => import("react-chessboard").then((m) => m.Chessboard),
@@ -55,6 +57,7 @@ export default function MoveTrainer({
   const [showHint, setShowHint] = useState(false);
   const [highlights, setHighlights] = useState<Record<string, object>>({});
   const [selectedSq, setSel] = useState<string | null>(null);
+  const [pendingPromo, setPendingPromo] = useState<{ from: string; to: string } | null>(null);
   // Learn flow per move: demo (shown) → explain (only if it has a note) → replay.
   const [phase, setPhase] = useState<"demo" | "explain" | "replay">("demo");
   const [animMs, setAnimMs] = useState(120); // board animation; 0 = instant (teleport)
@@ -111,6 +114,7 @@ export default function MoveTrainer({
     setAnimMs(0);
     setFen(moveIdx > 0 ? oppBefore : STARTING_FEN);
     setTimeout(() => { setAnimMs(120); setFen(beforeFen); }, 80);
+    setPendingPromo(null);
     clearSel();
     setPhase("replay");
   }
@@ -127,6 +131,7 @@ export default function MoveTrainer({
     setFlashSq(null);
     setAnimMs(120);
     setPhase("demo");
+    setPendingPromo(null);
     clearSel();
   }
 
@@ -148,11 +153,17 @@ export default function MoveTrainer({
     setSel(sq);
   }
 
-  function tryMove(from: string, to: string): boolean {
+  function tryMove(from: string, to: string, promotion?: PromotionPiece): boolean {
     if (!isUserMove || !expected || demoing) return false;
+    // Ask which piece before playing a promotion — the wrong choice is a wrong move.
+    if (!promotion && isPromotion(fen, from, to)) {
+      setPendingPromo({ from, to });
+      clearSel();
+      return true;
+    }
     const game = new Chess(fen);
     let result;
-    try { result = game.move({ from, to, promotion: "q" }); } catch { result = null; }
+    try { result = game.move({ from, to, promotion: promotion ?? "q" }); } catch { result = null; }
     clearSel();
     if (!result) return false;
 
@@ -173,7 +184,12 @@ export default function MoveTrainer({
     return false;
   }
 
-  function onDrop({ sourceSquare, targetSquare }) { return tryMove(sourceSquare, targetSquare); }
+  function onDrop({ sourceSquare, targetSquare }) {
+    const ok = tryMove(sourceSquare, targetSquare);
+    // A promotion only opens the picker, so report the drop as rejected and let
+    // the pawn snap back until a piece is chosen.
+    return ok && !isPromotion(fen, sourceSquare, targetSquare);
+  }
   function onPieceDragStart({ square }) { showLegalMoves(square); }
   function onSquareClick({ square: sq }) {
     if (selectedSq && selectedSq !== sq) {
@@ -257,6 +273,19 @@ export default function MoveTrainer({
             allowDragging: isUserMove && !demoing
           }}
         />
+        {pendingPromo && (
+          <PromotionPicker
+            square={pendingPromo.to}
+            color={sideToMove(fen)}
+            orientation={color === "black" ? "black" : "white"}
+            onSelect={(piece) => {
+              const { from, to } = pendingPromo;
+              setPendingPromo(null);
+              tryMove(from, to, piece);
+            }}
+            onCancel={() => setPendingPromo(null)}
+          />
+        )}
         {finished && (
           <div style={{
             position: "absolute", inset: 0, background: "var(--overlay)",

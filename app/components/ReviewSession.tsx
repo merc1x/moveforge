@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { Chess, Square } from "chess.js";
 import { nextState, levelLabel } from "@/lib/srs";
+import PromotionPicker from "./PromotionPicker";
+import { isPromotion, sideToMove, type PromotionPiece } from "@/lib/chess";
 
 const Chessboard = dynamic(
   () => import("react-chessboard").then((m) => m.Chessboard),
@@ -54,6 +56,7 @@ export default function ReviewSession({
   const [highlights, setHighlights] = useState<Record<string, object>>({});
   const [selectedSq, setSel] = useState<string | null>(null);
   const [flashSq, setFlashSq] = useState<string | null>(null);
+  const [pendingPromo, setPendingPromo] = useState<{ from: string; to: string } | null>(null);
 
   const finished = lineIdx >= total;
   const line = finished ? null : lines[lineIdx];
@@ -89,6 +92,7 @@ export default function ReviewSession({
       setAttempts(0);
       setRevealed(false);
       setFlashSq(null);
+      setPendingPromo(null);
       clearSel();
     }, lastPlayed?.comment ? 1200 : 650);
     return () => clearTimeout(t);
@@ -108,11 +112,17 @@ export default function ReviewSession({
     }).catch(console.error);
   }
 
-  function tryMove(from: string, to: string): boolean {
+  function tryMove(from: string, to: string, promotion?: PromotionPiece): boolean {
     if (!isUserTurn || !expected) return false;
+    // Ask which piece before playing a promotion — the wrong choice is a wrong move.
+    if (!promotion && isPromotion(fen, from, to)) {
+      setPendingPromo({ from, to });
+      clearSel();
+      return true;
+    }
     const game = new Chess(fen);
     let result;
-    try { result = game.move({ from, to, promotion: "q" }); } catch { result = null; }
+    try { result = game.move({ from, to, promotion: promotion ?? "q" }); } catch { result = null; }
     clearSel();
     if (!result) return false;
 
@@ -151,7 +161,12 @@ export default function ReviewSession({
     setSel(sq);
   }
 
-  function onDrop({ sourceSquare, targetSquare }) { return tryMove(sourceSquare, targetSquare); }
+  function onDrop({ sourceSquare, targetSquare }) {
+    const ok = tryMove(sourceSquare, targetSquare);
+    // A promotion only opens the picker, so report the drop as rejected and let
+    // the pawn snap back until a piece is chosen.
+    return ok && !isPromotion(fen, sourceSquare, targetSquare);
+  }
   function onPieceDragStart({ square }) { showLegal(square); }
   function onSquareClick({ square: sq }) {
     if (selectedSq && selectedSq !== sq) { if (tryMove(selectedSq, sq)) return; }
@@ -250,6 +265,7 @@ export default function ReviewSession({
             <div style={{
               width: "min(calc(100vh - 150px), calc(100vw - 440px), 760px)", aspectRatio: "1",
               borderRadius: 6, overflow: "hidden", boxShadow: "var(--board-shadow)", flexShrink: 0,
+              position: "relative",
             }}>
               <Chessboard
                 options={{
@@ -266,6 +282,19 @@ export default function ReviewSession({
                   allowDragging: isUserTurn,
                 }}
               />
+              {pendingPromo && (
+                <PromotionPicker
+                  square={pendingPromo.to}
+                  color={sideToMove(fen)}
+                  orientation={color === "black" ? "black" : "white"}
+                  onSelect={(piece) => {
+                    const { from, to } = pendingPromo;
+                    setPendingPromo(null);
+                    tryMove(from, to, piece);
+                  }}
+                  onCancel={() => setPendingPromo(null)}
+                />
+              )}
             </div>
 
             {/* Right panel: variation, move, answer */}

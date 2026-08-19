@@ -7,7 +7,9 @@ import dynamic from "next/dynamic";
 import { Chess, Square } from "chess.js";
 import MoveTrainer from "./MoveTrainer";
 import ThemeToggle from "./ThemeToggle";
+import PromotionPicker from "./PromotionPicker";
 import { isUserMove } from "@/lib/srs";
+import { isPromotion, sideToMove, type PromotionPiece } from "@/lib/chess";
 
 const Chessboard = dynamic(
   () => import("react-chessboard").then((m) => m.Chessboard),
@@ -177,6 +179,7 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
   const [fen, setFen] = useState(STARTING_FEN);
   const [highlights, setHighlights] = useState<Record<string, object>>({});
   const [selectedSq, setSel] = useState<string | null>(null);
+  const [pendingPromo, setPendingPromo] = useState<{ from: string; to: string } | null>(null);
   const [newVarName, setNewVarName] = useState("");
   const [showNewVar, setShowNewVar] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -254,6 +257,7 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
     setFen(STARTING_FEN);
     setHighlights({});
     setSel(null);
+    setPendingPromo(null);
   }
 
   function navigateTo(index: number) {
@@ -262,6 +266,7 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
     setFen(index === -1 ? STARTING_FEN : moves[index].fen);
     setHighlights({});
     setSel(null);
+    setPendingPromo(null);
   }
 
   useEffect(() => {
@@ -337,11 +342,19 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
     setSel(sq);
   }
 
-  function applyMove(from: string, to: string): boolean {
+  function applyMove(from: string, to: string, promotion?: PromotionPiece): boolean {
     if (!selectedId) return false;
+    // A promoting pawn waits for you to pick a piece; the move is replayed with
+    // that choice once the picker resolves.
+    if (!promotion && isPromotion(fen, from, to)) {
+      setPendingPromo({ from, to });
+      setHighlights({});
+      setSel(null);
+      return true;
+    }
     const game = new Chess(fen);
     let result;
-    try { result = game.move({ from, to, promotion: "q" }); } catch { return false; }
+    try { result = game.move({ from, to, promotion: promotion ?? "q" }); } catch { return false; }
     if (!result) return false;
 
     const newFen = game.fen();
@@ -556,7 +569,10 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
   }
 
   function onDrop({ sourceSquare, targetSquare }) {
-    return applyMove(sourceSquare, targetSquare);
+    const ok = applyMove(sourceSquare, targetSquare);
+    // A promotion only opens the picker, so report the drop as rejected and let
+    // the pawn snap back until a piece is chosen.
+    return ok && !isPromotion(fen, sourceSquare, targetSquare);
   }
   function onPieceDragStart({ square }) { showLegalMoves(square); }
   function onSquareClick({ square: sq }) {
@@ -566,11 +582,15 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
     showLegalMoves(sq);
   }
 
-  const sqStyles = { ...highlights };
+  // Last-move tint goes down first so the live selection and its legal-move dots
+  // always draw on top of it — otherwise selecting the piece that just captured
+  // (it stands on the last move's to-square) loses its own highlight.
+  const sqStyles: Record<string, object> = {};
   if (currentMove) {
     sqStyles[currentMove.fromSq] = { background: "#c8a96e20" };
     sqStyles[currentMove.toSq] = { background: "#c8a96e35" };
   }
+  Object.assign(sqStyles, highlights);
 
   // Group moves into pairs: { num, white: Move, black?: Move }
   const movePairs = moves.reduce<{ num: number; white: Move; black?: Move }[]>((acc, m, i) => {
@@ -847,7 +867,7 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
               />
             ) : (
             <div style={{ width: "min(calc(100vh - 180px), 100%, 860px)", display: "flex", flexDirection: "column", gap: 16 }}>
-              <div style={{ borderRadius: 4, overflow: "hidden", boxShadow: "var(--board-shadow)", aspectRatio: "1" }}>
+              <div style={{ borderRadius: 4, overflow: "hidden", boxShadow: "var(--board-shadow)", aspectRatio: "1", position: "relative" }}>
                 <Chessboard
                   options={{
                     position: fen,
@@ -862,6 +882,19 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
                     boardOrientation: repertoire.color === "black" ? "black" : "white"
                   }}
                 />
+                {pendingPromo && (
+                  <PromotionPicker
+                    square={pendingPromo.to}
+                    color={sideToMove(fen)}
+                    orientation={repertoire.color === "black" ? "black" : "white"}
+                    onSelect={(piece) => {
+                      const { from, to } = pendingPromo;
+                      setPendingPromo(null);
+                      applyMove(from, to, piece);
+                    }}
+                    onCancel={() => setPendingPromo(null)}
+                  />
+                )}
               </div>
               <div style={{ display: "flex", gap: 8 }}>
               {([
