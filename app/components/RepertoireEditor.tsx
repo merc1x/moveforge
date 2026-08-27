@@ -8,6 +8,8 @@ import { Chess, Square } from "chess.js";
 import MoveTrainer from "./MoveTrainer";
 import ThemeToggle from "./ThemeToggle";
 import PromotionPicker from "./PromotionPicker";
+import AnalysisPanel from "./AnalysisPanel";
+import { useStockfish, ANALYSIS_DEPTH } from "@/app/hooks/useStockfish";
 import { isUserMove } from "@/lib/srs";
 import { isPromotion, sideToMove, type PromotionPiece } from "@/lib/chess";
 
@@ -42,6 +44,8 @@ type Repertoire = {
 };
 
 const STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+
+const ANALYSIS_PREF_KEY = "analysisOn";
 
 // Split a multi-game PGN file into individual game strings. Games are
 // detected by a header block ([Tag "..."]) appearing after movetext.
@@ -190,7 +194,30 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
   const [learnNote, setLearnNote] = useState<Move | null>(null);
   const [importing, setImporting] = useState(false);
   const [importStatus, setImportStatus] = useState<{ kind: "error" | "info"; text: string } | null>(null);
+  const [analysisOn, setAnalysisOn] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Engine preference is per-browser, like the theme. Restored after mount so
+  // the server-rendered markup and the first client render agree.
+  useEffect(() => {
+    try { setAnalysisOn(localStorage.getItem(ANALYSIS_PREF_KEY) === "1"); } catch {}
+  }, []);
+
+  function toggleAnalysis() {
+    setAnalysisOn((on) => {
+      const next = !on;
+      try { localStorage.setItem(ANALYSIS_PREF_KEY, next ? "1" : "0"); } catch {}
+      return next;
+    });
+  }
+
+  // Only run in edit mode: the right sidebar is hidden while learning and
+  // training, and an evaluation there would give the answer away.
+  const engine = useStockfish({
+    fen,
+    enabled: analysisOn && mode === "edit",
+    depth: ANALYSIS_DEPTH,
+  });
 
   const selectedVar = variations.find((v) => v.id === selectedId) ?? null;
   const moves = selectedVar?.moves ?? [];
@@ -927,6 +954,19 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
            spoil learning and reveal answers while training) ── */}
       {mode === "edit" && (
       <div style={{ width: 260, flexShrink: 0, borderLeft: border, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div style={{ borderBottom: border }}>
+          <AnalysisPanel
+            fen={fen}
+            enabled={analysisOn}
+            onToggle={toggleAnalysis}
+            status={engine.status}
+            error={engine.error}
+            analysis={engine.analysis}
+            searching={engine.searching}
+            depth={ANALYSIS_DEPTH}
+          />
+        </div>
+
         <div style={{ padding: "10px 14px", borderBottom: border, fontSize: 10, color: "var(--text-4)" }}>
           Move List
         </div>

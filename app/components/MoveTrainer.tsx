@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { Chess, Square } from "chess.js";
 import PromotionPicker from "./PromotionPicker";
+import AnalysisPanel from "./AnalysisPanel";
+import { useStockfish, ANALYSIS_DEPTH } from "@/app/hooks/useStockfish";
 import { isPromotion, sideToMove, type PromotionPiece } from "@/lib/chess";
 
 const Chessboard = dynamic(
@@ -61,6 +63,11 @@ export default function MoveTrainer({
   // Learn flow per move: demo (shown) → explain (only if it has a note) → replay.
   const [phase, setPhase] = useState<"demo" | "explain" | "replay">("demo");
   const [animMs, setAnimMs] = useState(120); // board animation; 0 = instant (teleport)
+  // Post-run engine review: step back through the line you just learned before
+  // committing to the next variation. Only reachable once the run is finished.
+  const [analysing, setAnalysing] = useState(false);
+  const [engineOn, setEngineOn] = useState(true);
+  const [reviewIdx, setReviewIdx] = useState(-1); // -1 = starting position
 
   const finished = moves.length > 0 && moveIdx >= moves.length;
   const expected = finished ? null : moves[moveIdx] ?? null;
@@ -132,8 +139,50 @@ export default function MoveTrainer({
     setAnimMs(120);
     setPhase("demo");
     setPendingPromo(null);
+    setAnalysing(false);
     clearSel();
   }
+
+  // ── Post-run engine review ────────────────────────────────────────────────
+  // Drives the board off reviewIdx instead of the training flow. Safe because
+  // every trainer effect is gated on `expected`, which is null once finished.
+  function reviewGoTo(index: number) {
+    const idx = Math.max(-1, Math.min(moves.length - 1, index));
+    setReviewIdx(idx);
+    setAnimMs(120);
+    setFen(idx === -1 ? STARTING_FEN : moves[idx].fen);
+    setPendingPromo(null);
+    clearSel();
+  }
+
+  function startAnalysis() {
+    setEngineOn(true);
+    setAnalysing(true);
+    reviewGoTo(moves.length - 1); // open on the final position
+  }
+
+  const engine = useStockfish({
+    fen,
+    enabled: analysing && engineOn,
+    depth: ANALYSIS_DEPTH,
+  });
+
+  // Arrow keys walk the line while reviewing.
+  useEffect(() => {
+    if (!analysing) return;
+    function onKeyDown(e: KeyboardEvent) {
+      const target = e.target as HTMLElement;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
+      switch (e.key) {
+        case "ArrowLeft": e.preventDefault(); reviewGoTo(reviewIdx - 1); break;
+        case "ArrowRight": e.preventDefault(); reviewGoTo(reviewIdx + 1); break;
+        case "ArrowUp": e.preventDefault(); reviewGoTo(-1); break;
+        case "ArrowDown": e.preventDefault(); reviewGoTo(moves.length - 1); break;
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
 
   function showLegalMoves(sq: string) {
     if (!isUserMove) return;
@@ -200,10 +249,13 @@ export default function MoveTrainer({
 
   const hintSan = !learn && (attempts >= 3 || showHint); // train-only SAN reveal in status
 
+  // While reviewing, the tint follows the move you have stepped to, not the
+  // last one played in the run.
+  const tintMove = analysing ? (reviewIdx >= 0 ? moves[reviewIdx] : null) : lastPlayed;
   const sqStyles: Record<string, object> = { ...highlights };
-  if (lastPlayed) {
-    sqStyles[lastPlayed.fromSq] = { background: "#c8a96e20" };
-    sqStyles[lastPlayed.toSq] = { background: "#c8a96e35" };
+  if (tintMove) {
+    sqStyles[tintMove.fromSq] = { background: "#c8a96e20" };
+    sqStyles[tintMove.toSq] = { background: "#c8a96e35" };
   }
   // Train: nudge with the from-square after misses or "Show answer".
   if (!learn && expected && isUserMove && (attempts >= 2 || showHint)) {
@@ -221,7 +273,14 @@ export default function MoveTrainer({
 
   let statusDot = "var(--accent)";
   let statusText = "Your move";
-  if (finished) { statusDot = "var(--success)"; statusText = learn ? "Variation learned" : "Variation complete"; }
+  if (analysing) {
+    statusDot = "var(--info)";
+    const m = reviewIdx >= 0 ? moves[reviewIdx] : null;
+    statusText = m
+      ? `Reviewing ${Math.ceil((reviewIdx + 1) / 2)}.${reviewIdx % 2 === 0 ? "" : ".."} ${m.san}`
+      : "Reviewing the starting position";
+  }
+  else if (finished) { statusDot = "var(--success)"; statusText = learn ? "Variation learned" : "Variation complete"; }
   else if (!isUserMove) { statusDot = "var(--text-3)"; statusText = "Opponent replies…"; }
   else if (learn && expected) {
     statusDot = "var(--info)";
@@ -286,7 +345,7 @@ export default function MoveTrainer({
             onCancel={() => setPendingPromo(null)}
           />
         )}
-        {finished && (
+        {finished && !analysing && (
           <div style={{
             position: "absolute", inset: 0, background: "var(--overlay)",
             display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14
@@ -337,6 +396,20 @@ export default function MoveTrainer({
                 </button>
               )}
             </div>
+            {learn && (
+              <button
+                onClick={startAnalysis}
+                style={{
+                  background: "none", border: "none", color: "var(--text-3)", fontSize: 11,
+                  cursor: "pointer", fontFamily: "inherit", textDecoration: "underline",
+                  textUnderlineOffset: 3, padding: 0
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-3)"; }}
+              >
+                ⌕ Analyse this line first
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -360,6 +433,74 @@ export default function MoveTrainer({
           </div>
         </div>
 
+        {/* Engine review of the line you just learned */}
+        {analysing && (
+          <>
+            <div style={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden" }}>
+              <AnalysisPanel
+                fen={fen}
+                enabled={engineOn}
+                onToggle={() => setEngineOn((v) => !v)}
+                status={engine.status}
+                error={engine.error}
+                analysis={engine.analysis}
+                searching={engine.searching}
+                depth={ANALYSIS_DEPTH}
+              />
+            </div>
+
+            {/* Step through the line — buttons mirror the arrow keys */}
+            <div style={{ display: "flex", gap: 6 }}>
+              {([
+                ["⟨⟨", () => reviewGoTo(-1)],
+                ["⟨", () => reviewGoTo(reviewIdx - 1)],
+                ["⟩", () => reviewGoTo(reviewIdx + 1)],
+                ["⟩⟩", () => reviewGoTo(moves.length - 1)],
+              ] as [string, () => void][]).map(([label, fn], i) => (
+                <button
+                  key={i}
+                  onClick={fn}
+                  style={{ ...btnStyle, padding: "8px 0", fontSize: 13 }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; e.currentTarget.style.borderColor = "var(--accent-border)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-3)"; e.currentTarget.style.borderColor = "var(--border)"; }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {/* The comment you were taught for the move you are standing on */}
+            {reviewIdx >= 0 && moves[reviewIdx]?.comment && (
+              <div style={{
+                padding: "12px 14px", background: "var(--panel)", border: "1px solid var(--border)",
+                borderRadius: 8, fontSize: 12, lineHeight: 1.6, color: "var(--comment)", fontStyle: "italic"
+              }}>
+                {moves[reviewIdx].comment}
+              </div>
+            )}
+
+            <button
+              onClick={() => setAnalysing(false)}
+              style={btnStyle}
+              onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; e.currentTarget.style.borderColor = "var(--accent-border)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-3)"; e.currentTarget.style.borderColor = "var(--border)"; }}
+            >
+              ← Back to summary
+            </button>
+            {onNext && (
+              <button
+                onClick={onNext}
+                style={{
+                  ...btnStyle, background: "var(--accent)", border: "none",
+                  color: "var(--accent-text)", fontWeight: 700
+                }}
+              >
+                Next variation →
+              </button>
+            )}
+          </>
+        )}
+
         {learn && phase === "explain" && (
           <button
             onClick={startReplay}
@@ -373,7 +514,8 @@ export default function MoveTrainer({
           </button>
         )}
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {/* Hidden while reviewing — the review block carries its own actions */}
+        <div style={{ display: analysing ? "none" : "flex", flexDirection: "column", gap: 8 }}>
           {!learn && (
             <button
               onClick={() => setShowHint(true)}
