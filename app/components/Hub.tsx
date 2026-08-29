@@ -21,6 +21,12 @@ const SECTIONS: Section[] = [
     subtitle: "Build and train your opening repertoires",
     href: "/repertoires",
   },
+  {
+    key: "puzzles",
+    icon: "✦",
+    title: "Puzzles",
+    subtitle: "Coming soon",
+  },
 ];
 
 export default function Hub({ userInitial }: { userInitial: string }) {
