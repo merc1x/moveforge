@@ -27,6 +27,12 @@ const SECTIONS: Section[] = [
     title: "Puzzles",
     subtitle: "Coming soon",
   },
+  {
+    key: "deviate",
+    icon: "⤳",
+    title: "Deviate",
+    subtitle: "Compare your games against your repertoire",
+  },
 ];
 
 export default function Hub({ userInitial }: { userInitial: string }) {
