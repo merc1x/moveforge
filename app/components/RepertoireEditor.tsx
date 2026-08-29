@@ -787,6 +787,7 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
           {variations.map((v) => {
             const active = v.id === selectedId;
             const isRenaming = renamingId === v.id;
+            const learned = variationLearned(v);
             return (
               <div
                 key={v.id}
@@ -819,6 +820,14 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
                   />
                 ) : (
                   <>
+                    <div
+                      title={learned ? "Learned — ready to review" : "Not learned yet"}
+                      style={{
+                        width: 7, height: 7, borderRadius: "50%", flexShrink: 0, marginRight: 2,
+                        background: learned ? "var(--accent)" : "transparent",
+                        border: learned ? "none" : "1.5px solid var(--text-4)",
+                      }}
+                    />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 12, color: active ? "var(--text)" : "var(--text-2)", fontWeight: active ? 600 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {v.name}
@@ -826,7 +835,7 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
                       <div style={{ fontSize: 10, color: "var(--text-4)", marginTop: 2 }}>
                         {(() => {
                           const n = v.moves.filter((m) => isUserMove(m.order, repertoire.color)).length;
-                          return `${n} ${n === 1 ? "move" : "moves"}`;
+                          return `${n} ${n === 1 ? "move" : "moves"} · ${learned ? "learned" : "new"}`;
                         })()}
                       </div>
                     </div>
