@@ -157,7 +157,7 @@ export default function ProfileView({ data }: { data: ProfileData }) {
 
         {/* Top bar */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 28 }}>
-          <Link href="/" style={{ color: "var(--text-3)", fontSize: 14, textDecoration: "none" }}>← Repertoires</Link>
+          <Link href="/repertoires" style={{ color: "var(--text-3)", fontSize: 14, textDecoration: "none" }}>← Repertoires</Link>
           <ThemeToggle />
         </div>
 

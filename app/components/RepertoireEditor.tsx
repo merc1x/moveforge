@@ -664,7 +664,7 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
         <div style={{ padding: "14px 16px", borderBottom: border }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <button
-              onClick={() => router.push("/")}
+              onClick={() => router.push("/repertoires")}
               style={{ background: "none", border: "none", color: "var(--text-3)", fontSize: 11, cursor: "pointer", fontFamily: "inherit", padding: 0 }}
             >
               ← All Repertoires

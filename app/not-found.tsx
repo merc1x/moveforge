@@ -11,7 +11,7 @@ export default function NotFound() {
         </p>
         <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
           <Link
-            href="/"
+            href="/repertoires"
             style={{
               padding: "12px 22px", background: "var(--accent)", borderRadius: 8,
               color: "var(--accent-text)", fontSize: 15, fontWeight: 600, textDecoration: "none",
