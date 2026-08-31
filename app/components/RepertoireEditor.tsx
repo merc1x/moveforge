@@ -1,10 +1,10 @@
-// @ts-nocheck
 "use client";
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { Chess, Square } from "chess.js";
+import type { PieceDropHandlerArgs, PieceHandlerArgs, SquareHandlerArgs } from "react-chessboard";
 import MoveTrainer from "./MoveTrainer";
 import ThemeToggle from "./ThemeToggle";
 import PromotionPicker from "./PromotionPicker";
@@ -191,7 +191,6 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
   const [renameDraft, setRenameDraft] = useState("");
   const [mode, setMode] = useState<"edit" | "learn" | "train">("edit");
   const [commentDraft, setCommentDraft] = useState("");
-  const [learnNote, setLearnNote] = useState<Move | null>(null);
   const [importing, setImporting] = useState(false);
   const [importStatus, setImportStatus] = useState<{ kind: "error" | "info"; text: string } | null>(null);
   const [analysisOn, setAnalysisOn] = useState(false);
@@ -595,14 +594,18 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
     }
   }
 
-  function onDrop({ sourceSquare, targetSquare }) {
+  function onDrop({ sourceSquare, targetSquare }: PieceDropHandlerArgs): boolean {
+    // A drag released off the board has no target square.
+    if (!targetSquare) return false;
     const ok = applyMove(sourceSquare, targetSquare);
     // A promotion only opens the picker, so report the drop as rejected and let
     // the pawn snap back until a piece is chosen.
     return ok && !isPromotion(fen, sourceSquare, targetSquare);
   }
-  function onPieceDragStart({ square }) { showLegalMoves(square); }
-  function onSquareClick({ square: sq }) {
+  function onPieceDragStart({ square }: PieceHandlerArgs) {
+    if (square) showLegalMoves(square);
+  }
+  function onSquareClick({ square: sq }: SquareHandlerArgs) {
     if (selectedSq && selectedSq !== sq) {
       if (applyMove(selectedSq, sq)) return;
     }
@@ -979,20 +982,6 @@ export default function RepertoireEditor({ repertoire }: { repertoire: Repertoir
         <div style={{ padding: "10px 14px", borderBottom: border, fontSize: 10, color: "var(--text-4)" }}>
           Move List
         </div>
-
-        {/* Learn mode: notes for the move just played */}
-        {mode === "learn" && (
-          <div style={{ borderBottom: border, padding: "12px 14px", minHeight: 96, boxSizing: "border-box" }}>
-            <div style={{ fontSize: 11, color: "var(--text-4)", marginBottom: 6 }}>
-              Notes{learnNote ? ` · ${learnNote.san}` : ""}
-            </div>
-            <div style={{ fontSize: 11, lineHeight: 1.6, color: "var(--comment)", fontStyle: "italic" }}>
-              {learnNote?.comment
-                ? learnNote.comment
-                : <span style={{ color: "var(--text-4)" }}>Move comments will appear here as you play</span>}
-            </div>
-          </div>
-        )}
 
         <div style={{ flex: 1, overflowY: "auto", padding: "6px 0" }}>
           {/* Start position */}
