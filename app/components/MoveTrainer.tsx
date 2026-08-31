@@ -396,20 +396,18 @@ export default function MoveTrainer({
                 </button>
               )}
             </div>
-            {learn && (
-              <button
-                onClick={startAnalysis}
-                style={{
-                  background: "none", border: "none", color: "var(--text-3)", fontSize: 11,
-                  cursor: "pointer", fontFamily: "inherit", textDecoration: "underline",
-                  textUnderlineOffset: 3, padding: 0
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-3)"; }}
-              >
-                ⌕ Analyse this line first
-              </button>
-            )}
+            <button
+              onClick={startAnalysis}
+              style={{
+                background: "none", border: "none", color: "var(--text-3)", fontSize: 11,
+                cursor: "pointer", fontFamily: "inherit", textDecoration: "underline",
+                textUnderlineOffset: 3, padding: 0
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-3)"; }}
+            >
+              ⌕ Analyse this line first
+            </button>
           </div>
         )}
       </div>
