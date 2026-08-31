@@ -1,10 +1,10 @@
-// @ts-nocheck
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { Chess, Square } from "chess.js";
+import type { PieceDropHandlerArgs, PieceHandlerArgs, SquareHandlerArgs } from "react-chessboard";
 import { nextState, levelLabel } from "@/lib/srs";
 import PromotionPicker from "./PromotionPicker";
 import { isPromotion, sideToMove, type PromotionPiece } from "@/lib/chess";
@@ -161,14 +161,18 @@ export default function ReviewSession({
     setSel(sq);
   }
 
-  function onDrop({ sourceSquare, targetSquare }) {
+  function onDrop({ sourceSquare, targetSquare }: PieceDropHandlerArgs): boolean {
+    // A drag released off the board has no target square.
+    if (!targetSquare) return false;
     const ok = tryMove(sourceSquare, targetSquare);
     // A promotion only opens the picker, so report the drop as rejected and let
     // the pawn snap back until a piece is chosen.
     return ok && !isPromotion(fen, sourceSquare, targetSquare);
   }
-  function onPieceDragStart({ square }) { showLegal(square); }
-  function onSquareClick({ square: sq }) {
+  function onPieceDragStart({ square }: PieceHandlerArgs) {
+    if (square) showLegal(square);
+  }
+  function onSquareClick({ square: sq }: SquareHandlerArgs) {
     if (selectedSq && selectedSq !== sq) { if (tryMove(selectedSq, sq)) return; }
     showLegal(sq);
   }
