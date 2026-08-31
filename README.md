@@ -43,6 +43,8 @@ move is due again:
 - **NextAuth v5** with a credentials provider and JWT sessions, bcrypt hashes
 - **Prisma 7** on **PostgreSQL**, via the `@prisma/adapter-pg` driver adapter
 - **chess.js** for move legality, **react-chessboard** for the board
+- **Stockfish.js** (WASM) in a Web Worker for live analysis — GPL-3.0, see
+  [NOTICE.md](NOTICE.md)
 
 ## Getting started
 
@@ -130,16 +132,22 @@ All routes require a session and verify that the resource belongs to the caller
 ```
 app/
   api/                    route handlers (see table above)
-  components/             editor, trainer, review session, profile, theme toggle
+  components/             hub, editor, trainer, review session, analysis panel
+  hooks/
+    useStockfish.ts       engine worker, one search at a time
   login/  register/       auth pages
   profile/                account and stats
+  repertoires/            the repertoire list
   repertoire/[id]/        editor, and /review for a session
+  page.tsx                landing hub
 auth.ts                   NextAuth configuration
 lib/
   prisma.ts               PrismaClient singleton (pg adapter)
   srs.ts                  level ladder and scheduler
   ownership.ts            per-resource ownership checks
+  uci.ts                  engine scores and PV → SAN
 prisma/                   schema and migrations
+scripts/                  copy-stockfish.mjs (engine into public/)
 ```
 
 ## Deployment
@@ -149,3 +157,16 @@ build and runtime phases. The build applies pending migrations itself, so a
 fresh database is provisioned on first deploy.
 
 `trustHost: true` is set in [auth.ts](auth.ts) for running behind a proxy.
+
+The Stockfish engine is not committed. It is downloaded by the `stockfish`
+package's own postinstall and copied into `public/stockfish/` by
+`scripts/copy-stockfish.mjs`, which runs on `postinstall`, `predev` and
+`prebuild`. If that download is unavailable at build time the script warns and
+skips rather than failing the build — the app still deploys, but the analysis
+panel reports that the engine could not load.
+
+## Licensing
+
+MoveForge serves a GPL-3.0 licensed chess engine to the browser. See
+[NOTICE.md](NOTICE.md) for what is bundled, where it comes from, and what that
+obliges.
