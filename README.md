@@ -30,8 +30,10 @@ move is due again:
 - Multi-user accounts (email + password), every page and API route guarded with
   per-resource ownership checks
 - Repertoire and variation management, inline renaming, cascading deletes
-- PGN import — variations are named after their opening moves when the PGN
-  carries no headers
+- PGN import — multi-game files and nested sidelines, each branch flattened into
+  its own variation from move 1. Names come from the PGN's `ChapterName`,
+  `Event` or `Opening` header, falling back to the file name (`name (2)` per
+  game, `name #2` per sideline)
 - Per-variation learned/new indicator, plus to-learn and due counts per repertoire
 - Profile page: account management, study stats, and a GitHub-style review
   activity heatmap with streak (one entry per reviewed line, not per move)
