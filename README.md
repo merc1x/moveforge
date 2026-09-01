@@ -3,6 +3,10 @@
 A chess opening trainer. Build repertoires from your own lines or imported PGNs,
 learn them move by move, then keep them with spaced repetition.
 
+The landing page is a hub. Only **MoveForge** (the repertoire trainer, at
+`/repertoires`) is built; **Puzzles** and **Deviate** are placeholder cards,
+marked as upcoming and not clickable.
+
 ## How it works
 
 1. **Build** — create a repertoire (white or black), add variations by playing
@@ -12,6 +16,10 @@ learn them move by move, then keep them with spaced repetition.
    a learn run enrolls the variation's moves into the SRS at level 1.
 3. **Review** — due lines are replayed from the user's side. A move recalled on
    the first try is promoted one level; a miss resets it to level 1.
+4. **Analyse** — Stockfish runs in the browser and evaluates the position on the
+   board: an evaluation bar, the best move, and the principal variation in SAN.
+   Available in the editor, and as a review of the line you just played after a
+   learn or train run.
 
 Only your own moves are review cards — in a white repertoire the odd moves, in a
 black one the even moves (`isUserMove` in [lib/srs.ts](lib/srs.ts)).
@@ -35,6 +43,11 @@ move is due again:
   `Event` or `Opening` header, falling back to the file name (`name (2)` per
   game, `name #2` per sideline)
 - Per-variation learned/new indicator, plus to-learn and due counts per repertoire
+- Live engine analysis, off by default and toggled per browser. Nothing is
+  downloaded until it is switched on; position changes are debounced and only
+  one search runs at a time
+- Step back through a finished learn or train run with the engine before moving
+  on to the next variation
 - Profile page: account management, study stats, and a GitHub-style review
   activity heatmap with streak (one entry per reviewed line, not per move)
 - Light/dark theme toggle
@@ -55,6 +68,10 @@ Requirements: Node 20+, a running PostgreSQL instance.
 ```bash
 npm install
 ```
+
+This pulls roughly 240 MB: the `stockfish` package downloads every engine
+flavour from GitHub Releases in its own postinstall. Only the ~7 MB lite
+single-threaded build is actually served — see [Deployment](#deployment).
 
 Create a `.env` in the project root:
 
@@ -80,6 +97,11 @@ Open http://localhost:3000 and register an account.
 | `npm run build` | `prisma generate` → `prisma migrate deploy` → `next build` |
 | `npm start` | Serve the production build |
 | `npm run lint` | ESLint |
+
+Three lifecycle hooks run on their own: `postinstall` (`prisma generate` plus
+the engine copy), and `predev` / `prebuild` (the engine copy). All of them call
+`scripts/copy-stockfish.mjs`, which is idempotent and skips when
+`public/stockfish/` is already current.
 
 Note that `build` applies migrations, so `DATABASE_URL` must be reachable at
 build time — not only at runtime.
