@@ -26,8 +26,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
 
   const now = new Date();
 
-  // A line (variation) is due when any of the user's own moves in it is due —
-  // a new move never reviewed, or a scheduled review whose time has come.
+  // Candidate lines (variations) for this session, keyed by their earliest due review.
   type Candidate = { line: ReviewLine; sortKey: number };
   const candidates: Candidate[] = [];
 
@@ -70,7 +69,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
     });
   }
 
-  // Overdue scheduled lines first (earliest due), then brand-new lines.
+  // Most overdue lines first (earliest due review). Unlearned lines never get here.
   // All due lines are shown; you can exit any time — each move is saved as you go.
   candidates.sort((a, b) => a.sortKey - b.sortKey);
   const lines = candidates.map((c) => c.line);
