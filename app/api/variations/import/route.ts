@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { auth } from "@/auth";
@@ -43,27 +44,34 @@ export async function POST(req: Request) {
       }
     }
 
-    const variationIds = await prisma.$transaction(async (tx) => {
-      const ids: string[] = [];
-      for (const g of games) {
-        const variation = await tx.variation.create({
-          data: { name: g.name, repertoireId },
-        });
-        await tx.move.createMany({
-          data: g.moves.map((m) => ({
+    // Two bulk inserts instead of two queries per game: a big PGN would otherwise
+    // outlive the interactive-transaction timeout. Ids and createdAt are set here so
+    // moves can reference their variation and the import order is preserved.
+    const base = Date.now();
+    const variations = games.map((g, i) => ({
+      id: randomUUID(),
+      name: g.name,
+      repertoireId,
+      createdAt: new Date(base + i),
+    }));
+    const variationIds = variations.map((v) => v.id);
+
+    await prisma.$transaction([
+      prisma.variation.createMany({ data: variations }),
+      prisma.move.createMany({
+        data: games.flatMap((g, i) =>
+          g.moves.map((m) => ({
             fen: m.fen,
             san: m.san,
             fromSq: m.fromSq,
             toSq: m.toSq,
             order: m.order,
             comment: typeof m.comment === "string" && m.comment ? m.comment : null,
-            variationId: variation.id,
+            variationId: variations[i].id,
           })),
-        });
-        ids.push(variation.id);
-      }
-      return ids;
-    });
+        ),
+      }),
+    ]);
 
     const created = await prisma.variation.findMany({
       where: { id: { in: variationIds } },
